@@ -1,10 +1,10 @@
 module.exports = function(grunt) {
 
-  var glob = {
-    projName: 'PROJECTNAME'
-  };
 
   grunt.initConfig({
+
+    projName: 'PROJECTNAME',
+
     pkg: grunt.file.readJSON('package.json'),
 
     /**
@@ -16,7 +16,7 @@ module.exports = function(grunt) {
       },
       js: {
         src: ['src/js/**/*.js'],
-        dest: 'website/static/js/<%= glob.projName  %>.app.js'
+        dest: 'website/static/js/<%= projName  %>.app.js'
       }
     },
 
@@ -49,12 +49,12 @@ module.exports = function(grunt) {
       },
       dev: {
         files: {
-          "website/static/css/<%= glob.projName  %>.css": "src/less/bootstrap/bootstrap.less"
+          "website/static/css/<%= projName  %>.css": "src/less/bootstrap/bootstrap.less"
         }
       },
       prod: {
         files: {
-          "website/static/css/<%= glob.projName  %>.css": "src/less/bootstrap/bootstrap.less"
+          "website/static/css/<%= projName  %>.css": "src/less/bootstrap/bootstrap.less"
         },
         options: {
           cleancss: true
@@ -73,7 +73,7 @@ module.exports = function(grunt) {
           }
         },
         files: {
-          'website/static/js/<%= glob.projName  %>.app.js': ['website/static/js/<%= glob.projName  %>.app.js']
+          'website/static/js/<%= projName  %>.app.js': ['website/static/js/<%= projName  %>.app.js']
         }
       }
     },
