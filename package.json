@@ -1,7 +1,7 @@
 {
-  "name": "beaker",
+  "name": "datadabble",
   "version": "1.0.0",
-  "description": "Beaker ==========",
+  "description": "DataDabble ==========",
   "main": "Gruntfile.js",
   "directories": {
     "doc": "docs",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/joual/beaker.git"
+    "url": "https://github.com/adamklockars/datadabble.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/joual/beaker/issues"
+    "url": "https://github.com/adamklockars/datadabble/issues"
   },
-  "homepage": "https://github.com/joual/beaker",
+  "homepage": "https://github.com/adamklockars/datadabble",
   "devDependencies": {
     "grunt": "^0.4.5",
     "grunt-cli": "^0.1.13",
