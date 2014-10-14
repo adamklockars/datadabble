@@ -8,7 +8,15 @@ from flask import Flask, request, session, abort, g, url_for, jsonify
 from . import config
 
 # What we export
-__all__ = ['create_app']
+__all__ = ['create_app', 'register_blueprints']
+
+def register_blueprints(app):
+    # Prevents circular imports
+    from website.blueprints.front import front
+    from website.blueprints.database import dbs
+
+    app.register_blueprint(front)
+    app.register_blueprint(dbs)
 
 def create_app(config_object=None):
     if not config_object:
@@ -28,12 +36,6 @@ def create_app(config_object=None):
             '[in %(pathname)s:%(lineno)d]'
         ))
         app.logger.addHandler(file_handler)
-
-    # We import from here to avoid circular imports
-    from website.blueprints.front_views import mod as front_mod
-
-    # Views
-    app.register_blueprint(front_mod)
 
     # CSRF protection
     @app.before_request

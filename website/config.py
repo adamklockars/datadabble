@@ -4,7 +4,8 @@ class Config(object):
     # General
     DEBUG = False
     TESTING = False
-    SECRET_KEY = 'write_secret_key_here'
+    MONGODB_SETTINGS = {'DB': "datadabble"}
+    SECRET_KEY = "KeepThisS3cr3t"
 
 class DevelopmentConfig(Config):
     """ Development configuration! """
