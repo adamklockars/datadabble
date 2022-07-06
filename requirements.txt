@@ -16,7 +16,7 @@ configobj==4.7.2
 dnspython==1.11.1
 flask-mongoengine==0.7.1
 gyp==0.1
-html5lib==0.999
+html5lib==0.999999999
 itsdangerous==0.24
 mongoengine==0.8.7
 pyOpenSSL==0.13
