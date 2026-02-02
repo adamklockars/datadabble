@@ -8,6 +8,7 @@ from bson.errors import InvalidId
 from app.api.v1 import api_v1
 from app.api.schemas import EntrySchema, EntryCreateSchema, EntryUpdateSchema
 from app.models import Database, Entry
+from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 
 
 def get_database_or_404(slug):
@@ -70,6 +71,17 @@ def create_entry(slug):
     )
     entry.save()
 
+    # Audit log
+    log_action(
+        database=database,
+        user=current_user,
+        action="ENTRY_CREATED",
+        resource_type="entry",
+        resource_id=entry.id,
+        new_state={"values": entry.values},
+        details=f"Created entry with {len(entry.values)} values",
+    )
+
     return jsonify({
         "message": "Entry created successfully",
         "entry": EntrySchema().dump(entry.to_dict()),
@@ -111,6 +123,9 @@ def update_entry(slug, entry_id):
     if not entry:
         return jsonify({"error": "Entry not found"}), 404
 
+    # Capture previous state for audit
+    previous_values = dict(entry.values) if entry.values else {}
+
     schema = EntryUpdateSchema()
 
     try:
@@ -120,6 +135,21 @@ def update_entry(slug, entry_id):
 
     entry.values = data["values"]
     entry.save()
+
+    # Audit log
+    new_values = dict(entry.values) if entry.values else {}
+    changes = compute_changes({"values": previous_values}, {"values": new_values})
+    log_action(
+        database=database,
+        user=current_user,
+        action="ENTRY_UPDATED",
+        resource_type="entry",
+        resource_id=entry.id,
+        previous_state={"values": previous_values},
+        new_state={"values": new_values},
+        changes=changes,
+        details=f"Updated entry",
+    )
 
     return jsonify({
         "message": "Entry updated successfully",
@@ -142,6 +172,21 @@ def delete_entry(slug, entry_id):
 
     if not entry:
         return jsonify({"error": "Entry not found"}), 404
+
+    # Capture state for audit
+    previous_values = dict(entry.values) if entry.values else {}
+    entry_id_str = str(entry.id)
+
+    # Audit log before deletion
+    log_action(
+        database=database,
+        user=current_user,
+        action="ENTRY_DELETED",
+        resource_type="entry",
+        resource_id=entry_id_str,
+        previous_state={"values": previous_values},
+        details=f"Deleted entry",
+    )
 
     entry.delete()
 

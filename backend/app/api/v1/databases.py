@@ -6,6 +6,7 @@ from marshmallow import ValidationError
 from app.api.v1 import api_v1
 from app.api.schemas import DatabaseSchema, DatabaseCreateSchema, DatabaseUpdateSchema
 from app.models import Database, Field, Entry
+from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 
 
 @api_v1.route("/databases", methods=["GET"])
@@ -40,6 +41,18 @@ def create_database():
     )
     database.save()
 
+    # Audit log
+    log_action(
+        database=database,
+        user=current_user,
+        action="DATABASE_CREATED",
+        resource_type="database",
+        resource_id=database.id,
+        resource_name=database.title,
+        new_state=serialize_for_audit(database),
+        details=f"Created database '{database.title}'",
+    )
+
     return jsonify({
         "message": "Database created successfully",
         "database": DatabaseSchema().dump(database.to_dict()),
@@ -65,6 +78,9 @@ def update_database(slug):
     if not database:
         return jsonify({"error": "Database not found"}), 404
 
+    # Capture previous state for audit
+    previous_state = serialize_for_audit(database)
+
     schema = DatabaseUpdateSchema()
 
     try:
@@ -86,6 +102,22 @@ def update_database(slug):
 
     database.save()
 
+    # Audit log
+    new_state = serialize_for_audit(database)
+    changes = compute_changes(previous_state, new_state)
+    log_action(
+        database=database,
+        user=current_user,
+        action="DATABASE_UPDATED",
+        resource_type="database",
+        resource_id=database.id,
+        resource_name=database.title,
+        previous_state=previous_state,
+        new_state=new_state,
+        changes=changes,
+        details=f"Updated database '{database.title}'",
+    )
+
     return jsonify({
         "message": "Database updated successfully",
         "database": DatabaseSchema().dump(database.to_dict()),
@@ -99,6 +131,25 @@ def delete_database(slug):
     database = Database.objects(user=current_user, slug=slug).first()
     if not database:
         return jsonify({"error": "Database not found"}), 404
+
+    # Capture state for audit before deletion
+    previous_state = serialize_for_audit(database)
+    db_title = database.title
+    db_slug = database.slug
+    db_id = str(database.id)
+
+    # Audit log (create before deletion since database reference will be lost)
+    log_action(
+        database=None,  # Will be deleted
+        user=current_user,
+        action="DATABASE_DELETED",
+        resource_type="database",
+        resource_id=db_id,
+        resource_name=db_title,
+        previous_state=previous_state,
+        details=f"Deleted database '{db_title}'",
+        database_slug=db_slug,
+    )
 
     # Delete all associated entries and fields (CASCADE should handle this,
     # but we do it explicitly for clarity)

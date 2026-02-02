@@ -22,6 +22,8 @@ import { getDatabase, updateDatabase, deleteDatabase } from '../api/databases'
 import { getFields, createField, updateField, deleteField, previewTypeChange, reorderFields } from '../api/fields'
 import type { TypeChangeAnalysis } from '../api/fields'
 import { getEntries, createEntry, updateEntry, deleteEntry } from '../api/entries'
+import { getInsights, askQuestion } from '../api/ai'
+import { getAuditLogs, ACTION_LABELS, RESOURCE_TYPE_LABELS, type AuditLog } from '../api/audit'
 import { Button, Modal, Input, Select, Table, Loading } from '../components/ui'
 import type { Field, Entry, FieldType } from '../types'
 
@@ -37,36 +39,230 @@ const FIELD_TYPE_OPTIONS = [
   { value: 'LIST', label: 'List' },
 ]
 
-// Map field types to MySQL types
-const MYSQL_TYPE_MAP: Record<FieldType, string> = {
-  STR: 'VARCHAR(255)',
-  INT: 'INT',
-  DEC: 'DECIMAL(10, 2)',
-  BOOL: 'TINYINT(1)',
-  DATE: 'DATE',
-  EMAIL: 'VARCHAR(255)',
-  URL: 'VARCHAR(2048)',
-  DICT: 'JSON',
-  LIST: 'JSON',
+type SQLDialect = 'mysql' | 'postgresql' | 'sqlite' | 'sqlserver' | 'prisma'
+
+const SQL_DIALECT_OPTIONS = [
+  { value: 'mysql', label: 'MySQL' },
+  { value: 'postgresql', label: 'PostgreSQL' },
+  { value: 'sqlite', label: 'SQLite' },
+  { value: 'sqlserver', label: 'SQL Server' },
+  { value: 'prisma', label: 'Prisma Schema' },
+]
+
+// Type mappings for each dialect
+const TYPE_MAPS: Record<SQLDialect, Record<FieldType, string>> = {
+  mysql: {
+    STR: 'VARCHAR(255)',
+    INT: 'INT',
+    DEC: 'DECIMAL(10, 2)',
+    BOOL: 'TINYINT(1)',
+    DATE: 'DATE',
+    EMAIL: 'VARCHAR(255)',
+    URL: 'VARCHAR(2048)',
+    DICT: 'JSON',
+    LIST: 'JSON',
+  },
+  postgresql: {
+    STR: 'VARCHAR(255)',
+    INT: 'INTEGER',
+    DEC: 'DECIMAL(10, 2)',
+    BOOL: 'BOOLEAN',
+    DATE: 'DATE',
+    EMAIL: 'VARCHAR(255)',
+    URL: 'VARCHAR(2048)',
+    DICT: 'JSONB',
+    LIST: 'JSONB',
+  },
+  sqlite: {
+    STR: 'TEXT',
+    INT: 'INTEGER',
+    DEC: 'REAL',
+    BOOL: 'INTEGER',
+    DATE: 'TEXT',
+    EMAIL: 'TEXT',
+    URL: 'TEXT',
+    DICT: 'TEXT',
+    LIST: 'TEXT',
+  },
+  sqlserver: {
+    STR: 'NVARCHAR(255)',
+    INT: 'INT',
+    DEC: 'DECIMAL(10, 2)',
+    BOOL: 'BIT',
+    DATE: 'DATE',
+    EMAIL: 'NVARCHAR(255)',
+    URL: 'NVARCHAR(2048)',
+    DICT: 'NVARCHAR(MAX)',
+    LIST: 'NVARCHAR(MAX)',
+  },
+  prisma: {
+    STR: 'String',
+    INT: 'Int',
+    DEC: 'Decimal',
+    BOOL: 'Boolean',
+    DATE: 'DateTime',
+    EMAIL: 'String',
+    URL: 'String',
+    DICT: 'Json',
+    LIST: 'Json',
+  },
 }
 
-function generateMySQLQuery(tableName: string, fields: Field[]): string {
-  const sortedFields = [...fields].sort((a, b) => a.order - b.order)
-  const sanitizedName = tableName.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+function sanitizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+}
 
-  const columnDefs = sortedFields.map((field) => {
-    const colName = field.name.toLowerCase().replace(/[^a-z0-9_]/g, '_')
-    const mysqlType = MYSQL_TYPE_MAP[field.field_type]
+function toPascalCase(name: string): string {
+  return name
+    .split(/[^a-zA-Z0-9]/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('')
+}
+
+function generateSQLQuery(tableName: string, fields: Field[], dialect: SQLDialect): string {
+  const sortedFields = [...fields].sort((a, b) => a.order - b.order)
+  const typeMap = TYPE_MAPS[dialect]
+
+  if (dialect === 'prisma') {
+    return generatePrismaSchema(tableName, sortedFields, typeMap)
+  }
+
+  const sanitizedName = sanitizeName(tableName)
+
+  switch (dialect) {
+    case 'mysql':
+      return generateMySQLQuery(sanitizedName, sortedFields, typeMap)
+    case 'postgresql':
+      return generatePostgreSQLQuery(sanitizedName, sortedFields, typeMap)
+    case 'sqlite':
+      return generateSQLiteQuery(sanitizedName, sortedFields, typeMap)
+    case 'sqlserver':
+      return generateSQLServerQuery(sanitizedName, sortedFields, typeMap)
+    default:
+      return ''
+  }
+}
+
+function generateMySQLQuery(tableName: string, fields: Field[], typeMap: Record<FieldType, string>): string {
+  const columnDefs = fields.map((field) => {
+    const colName = sanitizeName(field.name)
+    const mysqlType = typeMap[field.field_type]
     const nullable = field.required ? 'NOT NULL' : 'NULL'
     return `  \`${colName}\` ${mysqlType} ${nullable}`
   })
 
-  return `CREATE TABLE \`${sanitizedName}\` (
+  return `CREATE TABLE \`${tableName}\` (
   \`id\` INT AUTO_INCREMENT PRIMARY KEY,
 ${columnDefs.join(',\n')},
   \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );`
+}
+
+function generatePostgreSQLQuery(tableName: string, fields: Field[], typeMap: Record<FieldType, string>): string {
+  const columnDefs = fields.map((field) => {
+    const colName = sanitizeName(field.name)
+    const pgType = typeMap[field.field_type]
+    const nullable = field.required ? 'NOT NULL' : ''
+    return `  "${colName}" ${pgType}${nullable ? ' ' + nullable : ''}`
+  })
+
+  return `CREATE TABLE "${tableName}" (
+  "id" SERIAL PRIMARY KEY,
+${columnDefs.join(',\n')},
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trigger for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_${tableName}_updated_at
+  BEFORE UPDATE ON "${tableName}"
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();`
+}
+
+function generateSQLiteQuery(tableName: string, fields: Field[], typeMap: Record<FieldType, string>): string {
+  const columnDefs = fields.map((field) => {
+    const colName = sanitizeName(field.name)
+    const sqliteType = typeMap[field.field_type]
+    const nullable = field.required ? 'NOT NULL' : ''
+    return `  "${colName}" ${sqliteType}${nullable ? ' ' + nullable : ''}`
+  })
+
+  return `CREATE TABLE "${tableName}" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+${columnDefs.join(',\n')},
+  "created_at" TEXT DEFAULT (datetime('now')),
+  "updated_at" TEXT DEFAULT (datetime('now'))
+);
+
+-- Trigger for updated_at
+CREATE TRIGGER update_${tableName}_updated_at
+  AFTER UPDATE ON "${tableName}"
+  FOR EACH ROW
+BEGIN
+  UPDATE "${tableName}" SET updated_at = datetime('now') WHERE id = NEW.id;
+END;`
+}
+
+function generateSQLServerQuery(tableName: string, fields: Field[], typeMap: Record<FieldType, string>): string {
+  const columnDefs = fields.map((field) => {
+    const colName = sanitizeName(field.name)
+    const ssType = typeMap[field.field_type]
+    const nullable = field.required ? 'NOT NULL' : 'NULL'
+    return `  [${colName}] ${ssType} ${nullable}`
+  })
+
+  return `CREATE TABLE [dbo].[${tableName}] (
+  [id] INT IDENTITY(1,1) PRIMARY KEY,
+${columnDefs.join(',\n')},
+  [created_at] DATETIME2 DEFAULT GETUTCDATE(),
+  [updated_at] DATETIME2 DEFAULT GETUTCDATE()
+);
+GO
+
+-- Trigger for updated_at
+CREATE TRIGGER [dbo].[TR_${tableName}_UpdatedAt]
+ON [dbo].[${tableName}]
+AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  UPDATE [dbo].[${tableName}]
+  SET [updated_at] = GETUTCDATE()
+  FROM [dbo].[${tableName}] t
+  INNER JOIN inserted i ON t.id = i.id;
+END;
+GO`
+}
+
+function generatePrismaSchema(tableName: string, fields: Field[], typeMap: Record<FieldType, string>): string {
+  const modelName = toPascalCase(tableName)
+
+  const fieldDefs = fields.map((field) => {
+    const fieldName = sanitizeName(field.name)
+    const prismaType = typeMap[field.field_type]
+    const optional = field.required ? '' : '?'
+    return `  ${fieldName} ${prismaType}${optional}`
+  })
+
+  return `model ${modelName} {
+  id        Int      @id @default(autoincrement())
+${fieldDefs.join('\n')}
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("${sanitizeName(tableName)}")
+}`
 }
 
 function generateCSV(fields: Field[], entries: Entry[]): string {
@@ -82,12 +278,16 @@ function generateCSV(fields: Field[], entries: Entry[]): string {
     return str
   }
 
-  // Header row
-  const header = sortedFields.map((f) => escapeCSV(f.name)).join(',')
+  // Header row: field names + Created, Updated
+  const header = [...sortedFields.map((f) => escapeCSV(f.name)), 'Created', 'Updated'].join(',')
 
   // Data rows
   const rows = entries.map((entry) =>
-    sortedFields.map((f) => escapeCSV(entry.values[f.name])).join(',')
+    [
+      ...sortedFields.map((f) => escapeCSV(entry.values[f.name])),
+      escapeCSV(entry.created_at),
+      escapeCSV(entry.updated_at),
+    ].join(',')
   )
 
   return [header, ...rows].join('\n')
@@ -196,9 +396,30 @@ export default function DatabaseDetail() {
 
   // SQL modal state
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false)
+  const [sqlDialect, setSqlDialect] = useState<SQLDialect>('mysql')
 
   // Export state
   const [isExporting, setIsExporting] = useState(false)
+
+  // AI state
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false)
+  const [aiTab, setAiTab] = useState<'insights' | 'ask'>('insights')
+  const [insights, setInsights] = useState<string | null>(null)
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false)
+  const [aiQuestion, setAiQuestion] = useState('')
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
+  const [isLoadingAnswer, setIsLoadingAnswer] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  // Audit log state
+  const [isAuditPanelOpen, setIsAuditPanelOpen] = useState(false)
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [auditPages, setAuditPages] = useState(0)
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false)
+  const [auditFilter, setAuditFilter] = useState<string>('')
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null)
 
   // Queries
   const { data: database, isLoading: dbLoading, error: dbError } = useQuery({
@@ -447,8 +668,83 @@ export default function DatabaseDetail() {
 
   const handleCopySQL = () => {
     if (!database) return
-    const sql = generateMySQLQuery(database.title, fields)
+    const sql = generateSQLQuery(database.title, fields, sqlDialect)
     navigator.clipboard.writeText(sql)
+  }
+
+  const handleGetInsights = async () => {
+    if (!slug) return
+    setIsLoadingInsights(true)
+    setAiError(null)
+    try {
+      const response = await getInsights(slug)
+      setInsights(response.insights)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } }
+      setAiError(err.response?.data?.error || 'Failed to get insights')
+    } finally {
+      setIsLoadingInsights(false)
+    }
+  }
+
+  const handleAskQuestion = async () => {
+    if (!slug || !aiQuestion.trim()) return
+    setIsLoadingAnswer(true)
+    setAiError(null)
+    try {
+      const response = await askQuestion(slug, aiQuestion)
+      setAiAnswer(response.answer)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } }
+      setAiError(err.response?.data?.error || 'Failed to get answer')
+    } finally {
+      setIsLoadingAnswer(false)
+    }
+  }
+
+  const loadAuditLogs = async (pageNum = 1) => {
+    if (!slug) return
+    setIsLoadingAudit(true)
+    try {
+      const filters = auditFilter ? { action: auditFilter } : undefined
+      const response = await getAuditLogs(slug, pageNum, 20, filters)
+      setAuditLogs(response.audit_logs)
+      setAuditPage(response.pagination.page)
+      setAuditTotal(response.pagination.total)
+      setAuditPages(response.pagination.pages)
+    } catch (error) {
+      console.error('Failed to load audit logs:', error)
+    } finally {
+      setIsLoadingAudit(false)
+    }
+  }
+
+  const handleExportAuditLogs = async () => {
+    if (!slug) return
+    const url = `/api/v1/databases/${slug}/audit-logs/export`
+
+    // Use apiClient to make an authenticated request
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      })
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = `${slug}-audit-log.csv`
+      link.click()
+      window.URL.revokeObjectURL(downloadUrl)
+    } catch (error) {
+      console.error('Failed to export audit logs:', error)
+    }
+  }
+
+  const formatAuditDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleString()
   }
 
   if (dbLoading) {
@@ -466,12 +762,27 @@ export default function DatabaseDetail() {
   const entries = entriesData?.entries ?? []
   const pagination = entriesData?.pagination
 
+  const formatEntryDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+  }
+
   const entryColumns = [
     ...fields.map((f) => ({
       key: f.name,
       header: f.name,
       render: (entry: Entry) => String(entry.values[f.name] ?? '-'),
     })),
+    {
+      key: 'created_at',
+      header: 'Created',
+      render: (entry: Entry) => formatEntryDate(entry.created_at),
+    },
+    {
+      key: 'updated_at',
+      header: 'Updated',
+      render: (entry: Entry) => formatEntryDate(entry.updated_at),
+    },
     {
       key: 'actions',
       header: 'Actions',
@@ -524,7 +835,7 @@ export default function DatabaseDetail() {
               {isExporting ? 'Exporting...' : 'Export CSV'}
             </Button>
             <Button variant="secondary" onClick={() => setIsSqlModalOpen(true)} disabled={fields.length === 0}>
-              View SQL
+              Export Schema
             </Button>
             <Button onClick={() => navigate(`/databases/${slug}/spreadsheet`)}>
               Spreadsheet View
@@ -571,6 +882,262 @@ export default function DatabaseDetail() {
             </DndContext>
           )}
         </div>
+      </div>
+
+      {/* AI Insights Section */}
+      <div className="bg-dark-700 rounded-lg border border-dark-500 mb-8">
+        <button
+          onClick={() => setIsAiPanelOpen(!isAiPanelOpen)}
+          className="w-full px-6 py-4 flex justify-between items-center hover:bg-dark-600 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-accent" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-lg font-medium text-white">AI Assistant</h2>
+          </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-5 w-5 text-dark-200 transition-transform ${isAiPanelOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+
+        {isAiPanelOpen && (
+          <div className="border-t border-dark-500">
+            {/* Tabs */}
+            <div className="flex border-b border-dark-500">
+              <button
+                onClick={() => setAiTab('insights')}
+                className={`px-6 py-3 text-sm font-medium transition-colors ${
+                  aiTab === 'insights'
+                    ? 'text-accent border-b-2 border-accent -mb-px'
+                    : 'text-dark-100 hover:text-white'
+                }`}
+              >
+                Insights
+              </button>
+              <button
+                onClick={() => setAiTab('ask')}
+                className={`px-6 py-3 text-sm font-medium transition-colors ${
+                  aiTab === 'ask'
+                    ? 'text-accent border-b-2 border-accent -mb-px'
+                    : 'text-dark-100 hover:text-white'
+                }`}
+              >
+                Ask Questions
+              </button>
+            </div>
+
+            <div className="p-6">
+              {aiError && (
+                <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-md text-red-400 text-sm">
+                  {aiError}
+                </div>
+              )}
+
+              {aiTab === 'insights' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-dark-100">
+                    Get AI-powered insights about your data, including patterns, quality issues, and suggestions.
+                  </p>
+                  <Button
+                    onClick={handleGetInsights}
+                    loading={isLoadingInsights}
+                    disabled={fields.length === 0}
+                  >
+                    {insights ? 'Refresh Insights' : 'Generate Insights'}
+                  </Button>
+                  {insights && (
+                    <div className="mt-4 p-4 bg-dark-800 rounded-lg">
+                      <pre className="text-sm text-dark-50 whitespace-pre-wrap font-sans">{insights}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {aiTab === 'ask' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-dark-100">
+                    Ask questions about your data in natural language.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={aiQuestion}
+                      onChange={(e) => setAiQuestion(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
+                      placeholder="e.g., What's the most common value in the status field?"
+                      className="flex-1 px-3 py-2 bg-dark-600 border border-dark-400 rounded-md text-white placeholder-dark-200 focus:outline-none focus:ring-2 focus:ring-accent"
+                      disabled={fields.length === 0}
+                    />
+                    <Button
+                      onClick={handleAskQuestion}
+                      loading={isLoadingAnswer}
+                      disabled={fields.length === 0 || !aiQuestion.trim()}
+                    >
+                      Ask
+                    </Button>
+                  </div>
+                  {aiAnswer && (
+                    <div className="mt-4 p-4 bg-dark-800 rounded-lg">
+                      <pre className="text-sm text-dark-50 whitespace-pre-wrap font-sans">{aiAnswer}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Audit Log Section */}
+      <div className="bg-dark-700 rounded-lg border border-dark-500 mb-8">
+        <button
+          onClick={() => {
+            setIsAuditPanelOpen(!isAuditPanelOpen)
+            if (!isAuditPanelOpen && auditLogs.length === 0) {
+              loadAuditLogs()
+            }
+          }}
+          className="w-full px-6 py-4 flex justify-between items-center hover:bg-dark-600 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-accent" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-lg font-medium text-white">Audit Log</h2>
+            {auditTotal > 0 && (
+              <span className="text-sm text-dark-200">({auditTotal} entries)</span>
+            )}
+          </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-5 w-5 text-dark-200 transition-transform ${isAuditPanelOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+
+        {isAuditPanelOpen && (
+          <div className="border-t border-dark-500 p-6">
+            {/* Filter and Export */}
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <select
+                  value={auditFilter}
+                  onChange={(e) => {
+                    setAuditFilter(e.target.value)
+                    setAuditPage(1)
+                  }}
+                  className="px-3 py-2 bg-dark-600 border border-dark-400 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <option value="">All Actions</option>
+                  {Object.entries(ACTION_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <Button size="sm" variant="secondary" onClick={() => loadAuditLogs(1)}>
+                  {isLoadingAudit ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
+              <Button size="sm" variant="secondary" onClick={handleExportAuditLogs}>
+                Export CSV
+              </Button>
+            </div>
+
+            {/* Audit Log Table */}
+            {isLoadingAudit ? (
+              <div className="text-center py-8 text-dark-100">Loading audit logs...</div>
+            ) : auditLogs.length === 0 ? (
+              <div className="text-center py-8 text-dark-100">No audit logs yet.</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-dark-500">
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium">Timestamp</th>
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium">User</th>
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium">Action</th>
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium">Resource</th>
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium">Details</th>
+                        <th className="text-left py-2 px-3 text-dark-100 font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="border-b border-dark-600 hover:bg-dark-600">
+                          <td className="py-2 px-3 text-dark-50 whitespace-nowrap">
+                            {formatAuditDate(log.created_at)}
+                          </td>
+                          <td className="py-2 px-3 text-dark-50">{log.user_email}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              log.action.includes('CREATED') ? 'bg-green-900/50 text-green-400' :
+                              log.action.includes('UPDATED') ? 'bg-blue-900/50 text-blue-400' :
+                              log.action.includes('DELETED') ? 'bg-red-900/50 text-red-400' :
+                              'bg-dark-500 text-dark-100'
+                            }`}>
+                              {ACTION_LABELS[log.action] || log.action}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-dark-50">
+                            {RESOURCE_TYPE_LABELS[log.resource_type] || log.resource_type}
+                            {log.resource_name && `: ${log.resource_name}`}
+                          </td>
+                          <td className="py-2 px-3 text-dark-200 max-w-xs truncate">
+                            {log.details}
+                          </td>
+                          <td className="py-2 px-3">
+                            {(log.changes || log.previous_state || log.new_state) && (
+                              <button
+                                onClick={() => setSelectedAuditLog(log)}
+                                className="text-accent hover:text-accent-light text-xs"
+                              >
+                                View Changes
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {auditPages > 1 && (
+                  <div className="mt-4 flex justify-center items-center gap-4">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={auditPage === 1}
+                      onClick={() => loadAuditLogs(auditPage - 1)}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm text-dark-100">
+                      Page {auditPage} of {auditPages}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={auditPage === auditPages}
+                      onClick={() => loadAuditLogs(auditPage + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Entries Section */}
@@ -814,15 +1381,33 @@ export default function DatabaseDetail() {
       <Modal
         isOpen={isSqlModalOpen}
         onClose={() => setIsSqlModalOpen(false)}
-        title="MySQL CREATE TABLE Query"
+        title="Database Schema Export"
       >
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-dark-100 mb-2">
+              Database Technology
+            </label>
+            <select
+              value={sqlDialect}
+              onChange={(e) => setSqlDialect(e.target.value as SQLDialect)}
+              className="w-full px-3 py-2 bg-dark-600 border border-dark-400 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              {SQL_DIALECT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <p className="text-sm text-dark-100">
-            Use this query to create a MySQL table with the same schema as your database.
+            {sqlDialect === 'prisma'
+              ? 'Add this model to your Prisma schema file.'
+              : `Use this query to create a ${SQL_DIALECT_OPTIONS.find((o) => o.value === sqlDialect)?.label} table with the same schema as your database.`}
           </p>
-          <div className="bg-dark-800 rounded-lg p-4 overflow-x-auto">
+          <div className="bg-dark-800 rounded-lg p-4 overflow-x-auto max-h-96">
             <pre className="text-sm text-green-400 font-mono whitespace-pre">
-              {database ? generateMySQLQuery(database.title, fields) : ''}
+              {database ? generateSQLQuery(database.title, fields, sqlDialect) : ''}
             </pre>
           </div>
           <div className="flex justify-end space-x-3 pt-4">
@@ -834,6 +1419,101 @@ export default function DatabaseDetail() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Audit Log Details Modal */}
+      <Modal
+        isOpen={!!selectedAuditLog}
+        onClose={() => setSelectedAuditLog(null)}
+        title="Audit Log Details"
+      >
+        {selectedAuditLog && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-dark-200">Timestamp:</span>
+                <p className="text-white">{formatAuditDate(selectedAuditLog.created_at)}</p>
+              </div>
+              <div>
+                <span className="text-dark-200">User:</span>
+                <p className="text-white">{selectedAuditLog.user_email}</p>
+              </div>
+              <div>
+                <span className="text-dark-200">Action:</span>
+                <p className="text-white">{ACTION_LABELS[selectedAuditLog.action] || selectedAuditLog.action}</p>
+              </div>
+              <div>
+                <span className="text-dark-200">Resource:</span>
+                <p className="text-white">
+                  {RESOURCE_TYPE_LABELS[selectedAuditLog.resource_type] || selectedAuditLog.resource_type}
+                  {selectedAuditLog.resource_name && `: ${selectedAuditLog.resource_name}`}
+                </p>
+              </div>
+            </div>
+
+            {selectedAuditLog.details && (
+              <div>
+                <span className="text-dark-200 text-sm">Details:</span>
+                <p className="text-white text-sm mt-1">{selectedAuditLog.details}</p>
+              </div>
+            )}
+
+            {selectedAuditLog.changes && Object.keys(selectedAuditLog.changes).length > 0 && (
+              <div>
+                <span className="text-dark-200 text-sm">Changes:</span>
+                <div className="mt-2 space-y-2">
+                  {Object.entries(selectedAuditLog.changes).map(([key, value]) => (
+                    <div key={key} className="bg-dark-800 rounded p-3 text-sm">
+                      <span className="font-medium text-white">{key}</span>
+                      <div className="mt-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-dark-200 text-xs">Previous:</span>
+                          <pre className="text-red-400 text-xs mt-1 whitespace-pre-wrap break-all">
+                            {JSON.stringify(value.from, null, 2)}
+                          </pre>
+                        </div>
+                        <div>
+                          <span className="text-dark-200 text-xs">New:</span>
+                          <pre className="text-green-400 text-xs mt-1 whitespace-pre-wrap break-all">
+                            {JSON.stringify(value.to, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedAuditLog.previous_state && !selectedAuditLog.changes && (
+              <div>
+                <span className="text-dark-200 text-sm">Previous State:</span>
+                <div className="bg-dark-800 rounded p-3 mt-2">
+                  <pre className="text-xs text-dark-50 whitespace-pre-wrap break-all">
+                    {JSON.stringify(selectedAuditLog.previous_state, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {selectedAuditLog.new_state && !selectedAuditLog.changes && (
+              <div>
+                <span className="text-dark-200 text-sm">New State:</span>
+                <div className="bg-dark-800 rounded p-3 mt-2">
+                  <pre className="text-xs text-dark-50 whitespace-pre-wrap break-all">
+                    {JSON.stringify(selectedAuditLog.new_state, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4">
+              <Button variant="secondary" onClick={() => setSelectedAuditLog(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

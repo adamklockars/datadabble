@@ -8,6 +8,7 @@ from bson.errors import InvalidId
 from app.api.v1 import api_v1
 from app.api.schemas import FieldSchema, FieldCreateSchema, FieldUpdateSchema
 from app.models import Database, Field, Entry
+from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 
 
 def can_convert_value(value, from_type, to_type):
@@ -168,6 +169,18 @@ def create_field(slug):
     )
     field.save()
 
+    # Audit log
+    log_action(
+        database=database,
+        user=current_user,
+        action="FIELD_CREATED",
+        resource_type="field",
+        resource_id=field.id,
+        resource_name=field.name,
+        new_state=serialize_for_audit(field),
+        details=f"Created field '{field.name}' ({field.field_type})",
+    )
+
     return jsonify({
         "message": "Field created successfully",
         "field": FieldSchema().dump(field.to_dict()),
@@ -239,6 +252,9 @@ def update_field(slug, field_id):
     if not field:
         return jsonify({"error": "Field not found"}), 404
 
+    # Capture previous state for audit
+    previous_state = serialize_for_audit(field)
+
     schema = FieldUpdateSchema()
     raw_data = request.get_json()
     confirm_data_loss = raw_data.pop("confirm_data_loss", False) if raw_data else False
@@ -301,6 +317,22 @@ def update_field(slug, field_id):
 
     field.save()
 
+    # Audit log
+    new_state = serialize_for_audit(field)
+    changes = compute_changes(previous_state, new_state)
+    log_action(
+        database=database,
+        user=current_user,
+        action="FIELD_UPDATED",
+        resource_type="field",
+        resource_id=field.id,
+        resource_name=field.name,
+        previous_state=previous_state,
+        new_state=new_state,
+        changes=changes,
+        details=f"Updated field '{field.name}'",
+    )
+
     return jsonify({
         "message": "Field updated successfully",
         "field": FieldSchema().dump(field.to_dict()),
@@ -323,6 +355,23 @@ def delete_field(slug, field_id):
     if not field:
         return jsonify({"error": "Field not found"}), 404
 
+    # Capture state for audit
+    previous_state = serialize_for_audit(field)
+    field_name = field.name
+    field_id_str = str(field.id)
+
+    # Audit log before deletion
+    log_action(
+        database=database,
+        user=current_user,
+        action="FIELD_DELETED",
+        resource_type="field",
+        resource_id=field_id_str,
+        resource_name=field_name,
+        previous_state=previous_state,
+        details=f"Deleted field '{field_name}'",
+    )
+
     field.delete()
 
     return jsonify({"message": "Field deleted successfully"}), 200
@@ -342,6 +391,10 @@ def reorder_fields(slug):
     if not field_ids:
         return jsonify({"error": "field_ids is required"}), 400
 
+    # Capture previous order for audit
+    old_fields = list(Field.objects(database=database).order_by("order", "-created_at"))
+    previous_order = [f.name for f in old_fields]
+
     # Validate all field IDs belong to this database
     for i, field_id in enumerate(field_ids):
         try:
@@ -356,6 +409,20 @@ def reorder_fields(slug):
         field.save()
 
     fields = Field.objects(database=database).order_by("order", "-created_at")
+    new_order = [f.name for f in fields]
+
+    # Audit log
+    log_action(
+        database=database,
+        user=current_user,
+        action="FIELD_REORDERED",
+        resource_type="field",
+        previous_state={"order": previous_order},
+        new_state={"order": new_order},
+        changes={"order": {"from": previous_order, "to": new_order}},
+        details=f"Reordered {len(field_ids)} fields",
+    )
+
     return jsonify({
         "message": "Fields reordered successfully",
         "fields": [FieldSchema().dump(f.to_dict()) for f in fields],

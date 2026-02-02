@@ -21,6 +21,9 @@ pytest>=8.0.0
 pytest-cov>=4.1.0
 mongomock>=4.1.0
 
+# AI
+anthropic>=0.18.0
+
 # Development
 black>=24.0.0
 flake8>=7.0.0

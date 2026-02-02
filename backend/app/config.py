@@ -30,6 +30,9 @@ class Config:
     # CORS settings
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
 
+    # AI settings (Anthropic Claude)
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
 
 class DevelopmentConfig(Config):
     """Development configuration."""

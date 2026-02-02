@@ -13,12 +13,21 @@ class Database(db.Document):
     title = db.StringField(max_length=120, required=True)
     slug = db.StringField(max_length=120, required=True)
     description = db.StringField(max_length=500)
+    # Keep user for backwards compatibility and to track creator
     user = db.ReferenceField(document_type="User", reverse_delete_rule=CASCADE, required=True)
+    # Account that owns this database (for multi-user access)
+    account = db.ReferenceField(document_type="Account", reverse_delete_rule=CASCADE)
 
     meta = {
         "collection": "databases",
         "allow_inheritance": True,
-        "indexes": ["-created_at", "slug", {"fields": ["user", "slug"], "unique": True}],
+        "indexes": [
+            "-created_at",
+            "slug",
+            "account",
+            {"fields": ["user", "slug"], "unique": True},
+            {"fields": ["account", "slug"], "unique": True, "sparse": True},
+        ],
         "ordering": ["-created_at"],
     }
 

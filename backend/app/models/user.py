@@ -13,10 +13,12 @@ class User(db.Document):
     first_name = db.StringField(max_length=50)
     last_name = db.StringField(max_length=50)
     password_hash = db.StringField(required=True)
+    # Current active account (for users with multiple account memberships)
+    active_account = db.ReferenceField(document_type="Account")
 
     meta = {
         "collection": "users",
-        "indexes": ["email", "-created_at"],
+        "indexes": ["email", "-created_at", "active_account"],
         "ordering": ["-created_at"],
     }
 
@@ -50,6 +52,7 @@ class User(db.Document):
             "email": self.email,
             "first_name": self.first_name,
             "last_name": self.last_name,
+            "active_account_id": str(self.active_account.id) if self.active_account else None,
             "created_at": format_datetime(self.created_at),
             "updated_at": format_datetime(self.updated_at),
         }

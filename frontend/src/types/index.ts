@@ -59,3 +59,38 @@ export interface ApiError {
   message?: string
   messages?: Record<string, string[]>
 }
+
+export type ChartType = 'bar' | 'line' | 'pie'
+export type AggregationType = 'count' | 'sum'
+
+export interface Visualization {
+  id: string
+  title: string
+  chart_type: ChartType
+  database_slugs: string[]
+  x_field: string
+  y_field: string | null
+  aggregation: AggregationType
+  created_at: string
+  updated_at: string
+}
+
+export interface ChartDataPoint {
+  name: string
+  value: number
+}
+
+export interface ChartDataSeries {
+  database_slug: string
+  database_title: string
+  data: ChartDataPoint[]
+}
+
+export interface VisualizationData {
+  labels: string[]
+  series: ChartDataSeries[]
+  chart_type?: ChartType
+  x_field?: string
+  y_field?: string | null
+  aggregation?: AggregationType
+}

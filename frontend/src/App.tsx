@@ -5,6 +5,8 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import DatabaseDetail from './pages/DatabaseDetail'
 import DatabaseSpreadsheet from './pages/DatabaseSpreadsheet'
+import Visualizations from './pages/Visualizations'
+import VisualizationDetail from './pages/VisualizationDetail'
 import Layout from './components/Layout'
 import ToastContainer from './components/Toast'
 
@@ -50,6 +52,8 @@ function App() {
         }>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="visualizations" element={<Visualizations />} />
+          <Route path="visualizations/:id" element={<VisualizationDetail />} />
           <Route path="databases/:slug" element={<DatabaseDetail />} />
           <Route path="databases/:slug/spreadsheet" element={<DatabaseSpreadsheet />} />
         </Route>
