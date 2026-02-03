@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getEntries, createEntry, updateEntry, deleteEntry } from '../api'
 
-export function useEntries(databaseSlug: string, page = 1, perPage = 20) {
+export function useEntries(databaseSlug: string, page = 1, perPage = 20, filter = '') {
   return useQuery({
-    queryKey: ['entries', databaseSlug, page, perPage],
-    queryFn: () => getEntries(databaseSlug, page, perPage),
+    queryKey: ['entries', databaseSlug, page, perPage, filter],
+    queryFn: () => getEntries(databaseSlug, { page, perPage, filter }),
     enabled: !!databaseSlug,
   })
 }

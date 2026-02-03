@@ -4,11 +4,13 @@ from flask_jwt_extended import jwt_required, current_user
 from marshmallow import ValidationError
 from bson import ObjectId
 from bson.errors import InvalidId
+from mongoengine import Q
 
 from app.api.v1 import api_v1
 from app.api.schemas import FieldSchema, FieldCreateSchema, FieldUpdateSchema
 from app.models import Database, Field, Entry
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
+from app.api.v1.permissions import check_permission
 
 
 def can_convert_value(value, from_type, to_type):
@@ -121,10 +123,14 @@ def analyze_type_change(entries, field_name, from_type, to_type):
 
 
 def get_database_or_404(slug):
-    """Get database owned by current user or return 404."""
-    database = Database.objects(user=current_user, slug=slug).first()
-    if not database:
-        return None
+    """Get database owned by current user or account, or return None."""
+    if current_user.active_account:
+        database = Database.objects(
+            Q(account=current_user.active_account, slug=slug) |
+            Q(user=current_user, account=None, slug=slug)
+        ).first()
+    else:
+        database = Database.objects(user=current_user, slug=slug).first()
     return database
 
 
@@ -142,6 +148,7 @@ def list_fields(slug):
 
 @api_v1.route("/databases/<slug>/fields", methods=["POST"])
 @jwt_required()
+@check_permission("field", "create")
 def create_field(slug):
     """Create a new field in a database."""
     database = get_database_or_404(slug)
@@ -238,6 +245,7 @@ def preview_type_change(slug, field_id):
 
 @api_v1.route("/databases/<slug>/fields/<field_id>", methods=["PUT"])
 @jwt_required()
+@check_permission("field", "update")
 def update_field(slug, field_id):
     """Update a field."""
     database = get_database_or_404(slug)
@@ -341,6 +349,7 @@ def update_field(slug, field_id):
 
 @api_v1.route("/databases/<slug>/fields/<field_id>", methods=["DELETE"])
 @jwt_required()
+@check_permission("field", "delete")
 def delete_field(slug, field_id):
     """Delete a field."""
     database = get_database_or_404(slug)
@@ -379,6 +388,7 @@ def delete_field(slug, field_id):
 
 @api_v1.route("/databases/<slug>/fields/reorder", methods=["POST"])
 @jwt_required()
+@check_permission("field", "update")
 def reorder_fields(slug):
     """Reorder fields in a database."""
     database = get_database_or_404(slug)

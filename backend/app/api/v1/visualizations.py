@@ -6,6 +6,7 @@ from flask_jwt_extended import jwt_required, current_user
 from marshmallow import ValidationError
 from bson import ObjectId
 from bson.errors import InvalidId
+from mongoengine import Q
 
 from app.api.v1 import api_v1
 from app.api.schemas import (
@@ -21,8 +22,15 @@ X_FIELD_UPDATED_AT = "__updated_at__"
 
 
 def get_database_or_404(slug):
-    """Get database owned by current user or return None."""
-    return Database.objects(user=current_user, slug=slug).first()
+    """Get database owned by current user or account, or return None."""
+    if current_user.active_account:
+        database = Database.objects(
+            Q(account=current_user.active_account, slug=slug) |
+            Q(user=current_user, account=None, slug=slug)
+        ).first()
+    else:
+        database = Database.objects(user=current_user, slug=slug).first()
+    return database
 
 
 def _get_entry_x_value(entry, x_field):

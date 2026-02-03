@@ -19,7 +19,9 @@ def create_app(config_name: str = "development") -> Flask:
 
     # Register blueprints
     from app.api.v1 import api_v1
+    from app.api.v1.users import users_bp
     app.register_blueprint(api_v1, url_prefix="/api/v1")
+    app.register_blueprint(users_bp, url_prefix="/api/v1/users")
 
     # Register error handlers
     from app.utils.errors import register_error_handlers

@@ -25,6 +25,7 @@ import { getEntries, createEntry, updateEntry, deleteEntry } from '../api/entrie
 import { getInsights, askQuestion } from '../api/ai'
 import { getAuditLogs, ACTION_LABELS, RESOURCE_TYPE_LABELS, type AuditLog } from '../api/audit'
 import { Button, Modal, Input, Select, Table, Loading } from '../components/ui'
+import EntryFilter from '../components/EntryFilter'
 import type { Field, Entry, FieldType } from '../types'
 
 const FIELD_TYPE_OPTIONS = [
@@ -370,6 +371,7 @@ export default function DatabaseDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
+  const [entryFilter, setEntryFilter] = useState('')
 
   // Field modal state
   const [isFieldModalOpen, setIsFieldModalOpen] = useState(false)
@@ -435,10 +437,15 @@ export default function DatabaseDetail() {
   })
 
   const { data: entriesData } = useQuery({
-    queryKey: ['entries', slug, page],
-    queryFn: () => getEntries(slug!, page),
+    queryKey: ['entries', slug, page, entryFilter],
+    queryFn: () => getEntries(slug!, { page, filter: entryFilter }),
     enabled: !!slug,
   })
+
+  const handleFilterChange = (filter: string) => {
+    setEntryFilter(filter)
+    setPage(1) // Reset to first page when filter changes
+  }
 
   // Mutations
   const createFieldMutation = useMutation({
@@ -655,7 +662,7 @@ export default function DatabaseDetail() {
     setIsExporting(true)
     try {
       // Fetch all entries (up to 10000)
-      const allEntriesData = await getEntries(slug, 1, 10000)
+      const allEntriesData = await getEntries(slug, { page: 1, perPage: 10000 })
       const csv = generateCSV(fields, allEntriesData.entries)
       const filename = `${database?.title || 'export'}-${new Date().toISOString().split('T')[0]}.csv`
       downloadCSV(csv, filename)
@@ -1153,11 +1160,20 @@ export default function DatabaseDetail() {
             <p className="text-dark-100 text-center py-4">Add fields before creating entries.</p>
           ) : (
             <>
+              {/* Entry Filter */}
+              <div className="mb-4">
+                <EntryFilter
+                  fields={fields}
+                  onFilterChange={handleFilterChange}
+                  initialFilter={entryFilter}
+                />
+              </div>
+
               <Table
                 columns={entryColumns}
                 data={entries}
                 keyExtractor={(e) => e.id}
-                emptyMessage="No entries yet."
+                emptyMessage={entryFilter ? "No entries match the filter." : "No entries yet."}
               />
               {pagination && pagination.pages > 1 && (
                 <div className="mt-4 flex justify-center space-x-2">

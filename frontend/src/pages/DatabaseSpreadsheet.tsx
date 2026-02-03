@@ -5,6 +5,7 @@ import { getDatabase } from '../api/databases'
 import { getFields } from '../api/fields'
 import { getEntries, createEntry, updateEntry, deleteEntry } from '../api/entries'
 import { Button, Loading } from '../components/ui'
+import EntryFilter from '../components/EntryFilter'
 import type { Field, Entry, FieldType } from '../types'
 
 interface CellPosition {
@@ -49,6 +50,7 @@ export default function DatabaseSpreadsheet() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
+  const [entryFilter, setEntryFilter] = useState('')
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null)
   const [editValue, setEditValue] = useState('')
   const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null)
@@ -72,10 +74,15 @@ export default function DatabaseSpreadsheet() {
   })
 
   const { data: entriesData, isLoading: entriesLoading } = useQuery({
-    queryKey: ['entries', slug, page],
-    queryFn: () => getEntries(slug!, page, 100),
+    queryKey: ['entries', slug, page, entryFilter],
+    queryFn: () => getEntries(slug!, { page, perPage: 100, filter: entryFilter }),
     enabled: !!slug,
   })
+
+  const handleFilterChange = (filter: string) => {
+    setEntryFilter(filter)
+    setPage(1) // Reset to first page when filter changes
+  }
 
   // Mutations
   const updateEntryMutation = useMutation({
@@ -417,6 +424,15 @@ export default function DatabaseSpreadsheet() {
       {/* Keyboard shortcuts hint */}
       <div className="text-xs text-dark-200 mb-2">
         Enter to edit, Tab to move, Esc to cancel, Arrow keys to navigate, Delete to clear cell
+      </div>
+
+      {/* Entry Filter */}
+      <div className="mb-4">
+        <EntryFilter
+          fields={sortedFields}
+          onFilterChange={handleFilterChange}
+          initialFilter={entryFilter}
+        />
       </div>
 
       {/* Spreadsheet */}

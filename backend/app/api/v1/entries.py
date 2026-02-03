@@ -4,25 +4,32 @@ from flask_jwt_extended import jwt_required, current_user
 from marshmallow import ValidationError
 from bson import ObjectId
 from bson.errors import InvalidId
+from mongoengine import Q
 
 from app.api.v1 import api_v1
 from app.api.schemas import EntrySchema, EntryCreateSchema, EntryUpdateSchema
-from app.models import Database, Entry
+from app.models import Database, Entry, Field
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
+from app.api.v1.permissions import check_permission
+from app.api.v1.filter_parser import parse_filter, ast_to_mongo_query, FilterParseError
 
 
 def get_database_or_404(slug):
-    """Get database owned by current user or return 404."""
-    database = Database.objects(user=current_user, slug=slug).first()
-    if not database:
-        return None
+    """Get database owned by current user or account, or return None."""
+    if current_user.active_account:
+        database = Database.objects(
+            Q(account=current_user.active_account, slug=slug) |
+            Q(user=current_user, account=None, slug=slug)
+        ).first()
+    else:
+        database = Database.objects(user=current_user, slug=slug).first()
     return database
 
 
 @api_v1.route("/databases/<slug>/entries", methods=["GET"])
 @jwt_required()
 def list_entries(slug):
-    """List entries for a database with pagination."""
+    """List entries for a database with pagination and filtering."""
     database = get_database_or_404(slug)
     if not database:
         return jsonify({"error": "Database not found"}), 404
@@ -32,12 +39,38 @@ def list_entries(slug):
     per_page = request.args.get("per_page", 20, type=int)
     per_page = min(per_page, 100)  # Max 100 per page
 
-    # Get total count
-    total = Entry.objects(database=database).count()
+    # Filter expression
+    filter_expr = request.args.get("filter", "").strip()
+
+    # Build base query
+    base_query = {"database": database}
+
+    # Apply filter if provided
+    if filter_expr:
+        try:
+            # Get field types for proper value conversion
+            fields = Field.objects(database=database)
+            field_types = {f.name: f.field_type for f in fields}
+
+            ast = parse_filter(filter_expr)
+            filter_query = ast_to_mongo_query(ast, field_types)
+
+            if filter_query:
+                # Use raw query with __raw__ for complex MongoDB queries
+                entries_query = Entry.objects(database=database).filter(__raw__=filter_query)
+            else:
+                entries_query = Entry.objects(database=database)
+        except FilterParseError as e:
+            return jsonify({"error": f"Invalid filter: {str(e)}"}), 400
+    else:
+        entries_query = Entry.objects(database=database)
+
+    # Get total count (with filter applied)
+    total = entries_query.count()
 
     # Get paginated entries
     skip = (page - 1) * per_page
-    entries = Entry.objects(database=database).skip(skip).limit(per_page)
+    entries = entries_query.skip(skip).limit(per_page)
 
     return jsonify({
         "entries": [EntrySchema().dump(e.to_dict()) for e in entries],
@@ -47,11 +80,34 @@ def list_entries(slug):
             "total": total,
             "pages": (total + per_page - 1) // per_page if per_page > 0 else 0,
         },
+        "filter": filter_expr if filter_expr else None,
     }), 200
+
+
+@api_v1.route("/databases/<slug>/entries/validate-filter", methods=["POST"])
+@jwt_required()
+def validate_filter(slug):
+    """Validate a filter expression without executing it."""
+    database = get_database_or_404(slug)
+    if not database:
+        return jsonify({"error": "Database not found"}), 404
+
+    data = request.get_json() or {}
+    filter_expr = data.get("filter", "").strip()
+
+    if not filter_expr:
+        return jsonify({"valid": True, "ast": {"type": "empty"}}), 200
+
+    try:
+        ast = parse_filter(filter_expr)
+        return jsonify({"valid": True, "ast": ast}), 200
+    except FilterParseError as e:
+        return jsonify({"valid": False, "error": str(e)}), 200
 
 
 @api_v1.route("/databases/<slug>/entries", methods=["POST"])
 @jwt_required()
+@check_permission("entry", "create")
 def create_entry(slug):
     """Create a new entry in a database."""
     database = get_database_or_404(slug)
@@ -109,6 +165,7 @@ def get_entry(slug, entry_id):
 
 @api_v1.route("/databases/<slug>/entries/<entry_id>", methods=["PUT"])
 @jwt_required()
+@check_permission("entry", "update")
 def update_entry(slug, entry_id):
     """Update an entry."""
     database = get_database_or_404(slug)
@@ -159,6 +216,7 @@ def update_entry(slug, entry_id):
 
 @api_v1.route("/databases/<slug>/entries/<entry_id>", methods=["DELETE"])
 @jwt_required()
+@check_permission("entry", "delete")
 def delete_entry(slug, entry_id):
     """Delete an entry."""
     database = get_database_or_404(slug)

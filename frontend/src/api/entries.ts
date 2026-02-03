@@ -4,6 +4,7 @@ import type { Entry, Pagination } from '../types'
 interface EntriesResponse {
   entries: Entry[]
   pagination: Pagination
+  filter?: string | null
 }
 
 interface CreateEntryData {
@@ -14,10 +15,27 @@ interface UpdateEntryData {
   values: Record<string, unknown>
 }
 
-export async function getEntries(databaseSlug: string, page = 1, perPage = 20): Promise<EntriesResponse> {
-  const response = await apiClient.get<EntriesResponse>(`/databases/${databaseSlug}/entries`, {
-    params: { page, per_page: perPage },
-  })
+interface GetEntriesOptions {
+  page?: number
+  perPage?: number
+  filter?: string
+}
+
+export async function getEntries(databaseSlug: string, options: GetEntriesOptions = {}): Promise<EntriesResponse> {
+  const { page = 1, perPage = 20, filter } = options
+  const params: Record<string, unknown> = { page, per_page: perPage }
+  if (filter) {
+    params.filter = filter
+  }
+  const response = await apiClient.get<EntriesResponse>(`/databases/${databaseSlug}/entries`, { params })
+  return response.data
+}
+
+export async function validateFilter(databaseSlug: string, filter: string): Promise<{ valid: boolean; error?: string; ast?: unknown }> {
+  const response = await apiClient.post<{ valid: boolean; error?: string; ast?: unknown }>(
+    `/databases/${databaseSlug}/entries/validate-filter`,
+    { filter }
+  )
   return response.data
 }
 

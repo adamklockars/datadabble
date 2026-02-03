@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
+import LandingPage from './pages/LandingPage'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -7,6 +8,7 @@ import DatabaseDetail from './pages/DatabaseDetail'
 import DatabaseSpreadsheet from './pages/DatabaseSpreadsheet'
 import Visualizations from './pages/Visualizations'
 import VisualizationDetail from './pages/VisualizationDetail'
+import TeamManagement from './pages/TeamManagement'
 import Layout from './components/Layout'
 import ToastContainer from './components/Toast'
 
@@ -14,7 +16,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>
@@ -30,11 +32,22 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function HomeRoute() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <LandingPage />
+}
+
 function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
       <Routes>
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/login" element={
           <PublicRoute>
             <Login />
@@ -45,19 +58,19 @@ function App() {
             <Register />
           </PublicRoute>
         } />
-        <Route path="/" element={
+        <Route element={
           <ProtectedRoute>
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="visualizations" element={<Visualizations />} />
           <Route path="visualizations/:id" element={<VisualizationDetail />} />
           <Route path="databases/:slug" element={<DatabaseDetail />} />
           <Route path="databases/:slug/spreadsheet" element={<DatabaseSpreadsheet />} />
+          <Route path="team" element={<TeamManagement />} />
         </Route>
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

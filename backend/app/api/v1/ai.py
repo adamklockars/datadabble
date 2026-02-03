@@ -2,16 +2,21 @@
 import json
 from flask import jsonify, request, current_app
 from flask_jwt_extended import jwt_required, current_user
+from mongoengine import Q
 
 from app.api.v1 import api_v1
 from app.models import Database, Field, Entry
 
 
 def get_database_or_404(slug):
-    """Get database owned by current user or return 404."""
-    database = Database.objects(user=current_user, slug=slug).first()
-    if not database:
-        return None
+    """Get database owned by current user or account, or return None."""
+    if current_user.active_account:
+        database = Database.objects(
+            Q(account=current_user.active_account, slug=slug) |
+            Q(user=current_user, account=None, slug=slug)
+        ).first()
+    else:
+        database = Database.objects(user=current_user, slug=slug).first()
     return database
 
 
