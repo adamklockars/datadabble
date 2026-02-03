@@ -3,7 +3,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from app.config import config
-from app.extensions import db, jwt, ma
+from app.extensions import db, jwt, ma, mail
 
 
 def create_app(config_name: str = "development") -> Flask:
@@ -15,6 +15,7 @@ def create_app(config_name: str = "development") -> Flask:
     db.init_app(app)
     jwt.init_app(app)
     ma.init_app(app)
+    mail.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     # Register blueprints

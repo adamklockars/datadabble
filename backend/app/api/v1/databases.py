@@ -9,6 +9,7 @@ from app.api.schemas import DatabaseSchema, DatabaseCreateSchema, DatabaseUpdate
 from app.models import Database, Field, Entry
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 from app.api.v1.permissions import check_permission
+from app.api.v1.notification_service import notify_account_members
 
 
 @api_v1.route("/databases", methods=["GET"])
@@ -68,6 +69,21 @@ def create_database():
         new_state=serialize_for_audit(database),
         details=f"Created database '{database.title}'",
     )
+
+    # Notify account members
+    if current_user.active_account:
+        notify_account_members(
+            account=current_user.active_account,
+            notification_type="database_created",
+            title=f"New database: {database.title}",
+            message=f"{current_user.email} created database '{database.title}'",
+            link=f"/databases/{database.slug}",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=database.slug,
+            resource_type="database",
+            resource_id=database.id,
+        )
 
     return jsonify({
         "message": "Database created successfully",
@@ -152,6 +168,21 @@ def update_database(slug):
         details=f"Updated database '{database.title}'",
     )
 
+    # Notify account members
+    if database.account:
+        notify_account_members(
+            account=database.account,
+            notification_type="database_updated",
+            title=f"Database updated: {database.title}",
+            message=f"{current_user.email} updated database '{database.title}'",
+            link=f"/databases/{database.slug}",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=database.slug,
+            resource_type="database",
+            resource_id=database.id,
+        )
+
     return jsonify({
         "message": "Database updated successfully",
         "database": DatabaseSchema().dump(database.to_dict()),
@@ -172,6 +203,7 @@ def delete_database(slug):
     db_title = database.title
     db_slug = database.slug
     db_id = str(database.id)
+    db_account = database.account
 
     # Audit log (create before deletion since database reference will be lost)
     log_action(
@@ -184,7 +216,23 @@ def delete_database(slug):
         previous_state=previous_state,
         details=f"Deleted database '{db_title}'",
         database_slug=db_slug,
+        account=db_account,
     )
+
+    # Notify account members before deletion
+    if db_account:
+        notify_account_members(
+            account=db_account,
+            notification_type="database_deleted",
+            title=f"Database deleted: {db_title}",
+            message=f"{current_user.email} deleted database '{db_title}'",
+            link="/dashboard",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=db_slug,
+            resource_type="database",
+            resource_id=db_id,
+        )
 
     # Delete all associated entries and fields (CASCADE should handle this,
     # but we do it explicitly for clarity)

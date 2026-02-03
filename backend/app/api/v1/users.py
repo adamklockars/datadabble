@@ -6,6 +6,7 @@ from marshmallow import Schema, fields, validate, ValidationError
 from app.models import User, Account, AccountMembership, ResourcePermissions, Permissions
 from app.api.v1.permissions import get_current_user, require_admin, is_account_admin
 from app.api.v1.audit_helper import log_action
+from app.api.v1.notification_service import create_notification
 
 users_bp = Blueprint("users", __name__)
 
@@ -163,6 +164,20 @@ def invite_member():
         account=user.active_account,
     )
 
+    # Notify the invited user
+    account_name = user.active_account.name if user.active_account else "a team"
+    create_notification(
+        recipient=invited_user,
+        notification_type="team_invite",
+        title=f"You've been invited to {account_name}",
+        message=f"{user.email} invited you to join {account_name} as a {data['role']}",
+        link="/team",
+        actor=user,
+        account=user.active_account,
+        resource_type="membership",
+        resource_id=membership.id,
+    )
+
     return jsonify({"membership": membership.to_dict()}), 201
 
 
@@ -222,6 +237,26 @@ def update_member(member_id):
         new_state=membership.to_dict(),
         account=user.active_account,
     )
+
+    # Notify the affected user about role/status change
+    if membership.user.id != user.id:
+        changes_desc = []
+        if "role" in data:
+            changes_desc.append(f"role changed to {data['role']}")
+        if "status" in data:
+            changes_desc.append(f"status changed to {data['status']}")
+        if changes_desc:
+            create_notification(
+                recipient=membership.user,
+                notification_type="member_role_changed",
+                title="Your membership was updated",
+                message=f"{user.email} updated your membership: {', '.join(changes_desc)}",
+                link="/team",
+                actor=user,
+                account=user.active_account,
+                resource_type="membership",
+                resource_id=membership.id,
+            )
 
     return jsonify({"membership": membership.to_dict()}), 200
 

@@ -11,6 +11,7 @@ import {
   DEFAULT_PERMISSIONS,
 } from '../api/users';
 import { useAuthStore } from '../store/authStore';
+import { Button, Modal, Input, Select } from '../components/ui';
 
 function PermissionsEditor({
   permissions,
@@ -38,10 +39,10 @@ function PermissionsEditor({
     <div className="space-y-4">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b">
-            <th className="text-left py-2 font-medium text-gray-700">Resource</th>
+          <tr className="border-b border-dark-500">
+            <th className="text-left py-2 font-medium text-dark-100">Resource</th>
             {actions.map((action) => (
-              <th key={action} className="text-center py-2 font-medium text-gray-700 capitalize">
+              <th key={action} className="text-center py-2 font-medium text-dark-100 capitalize">
                 {action}
               </th>
             ))}
@@ -49,8 +50,8 @@ function PermissionsEditor({
         </thead>
         <tbody>
           {resources.map((resource) => (
-            <tr key={resource} className="border-b">
-              <td className="py-2 font-medium text-gray-700 capitalize">{resource}</td>
+            <tr key={resource} className="border-b border-dark-600">
+              <td className="py-2 font-medium text-white capitalize">{resource}</td>
               {actions.map((action) => (
                 <td key={action} className="text-center py-2">
                   <input
@@ -58,7 +59,7 @@ function PermissionsEditor({
                     checked={permissions[resource]?.[action] ?? false}
                     onChange={(e) => handleChange(resource, action, e.target.checked)}
                     disabled={disabled}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    className="rounded border-dark-400 bg-dark-600 text-accent focus:ring-accent disabled:opacity-50"
                   />
                 </td>
               ))}
@@ -96,83 +97,65 @@ function InviteModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Invite Team Member</h2>
+    <Modal isOpen onClose={onClose} title="Invite Team Member">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Email Address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="colleague@example.com"
+          required
+        />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="colleague@example.com"
-                required
-              />
-            </div>
+        <Select
+          label="Role"
+          value={role}
+          onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'member')}
+          options={[
+            { value: 'member', label: 'Member' },
+            { value: 'admin', label: 'Administrator' },
+          ]}
+        />
+        <p className="text-sm text-dark-100 -mt-2">
+          {role === 'admin'
+            ? 'Administrators have full access and can manage team members.'
+            : 'Members can view databases and manage entries, but cannot modify structure.'}
+        </p>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-              <select
-                value={role}
-                onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'member')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="member">Member</option>
-                <option value="admin">Administrator</option>
-              </select>
-              <p className="text-sm text-gray-500 mt-1">
-                {role === 'admin'
-                  ? 'Administrators have full access and can manage team members.'
-                  : 'Members can view databases and manage entries, but cannot modify structure.'}
-              </p>
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showCustomPermissions}
-                  onChange={(e) => {
-                    setShowCustomPermissions(e.target.checked);
-                    if (!e.target.checked) {
-                      setPermissions(DEFAULT_PERMISSIONS[role]);
-                    }
-                  }}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Customize permissions</span>
-              </label>
-            </div>
-
-            {showCustomPermissions && (
-              <div className="border rounded-md p-4 bg-gray-50">
-                <PermissionsEditor permissions={permissions} onChange={setPermissions} />
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Send Invitation
-              </button>
-            </div>
-          </form>
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showCustomPermissions}
+              onChange={(e) => {
+                setShowCustomPermissions(e.target.checked);
+                if (!e.target.checked) {
+                  setPermissions(DEFAULT_PERMISSIONS[role]);
+                }
+              }}
+              className="rounded border-dark-400 bg-dark-600 text-accent focus:ring-accent"
+            />
+            <span className="text-sm text-dark-100">Customize permissions</span>
+          </label>
         </div>
-      </div>
-    </div>
+
+        {showCustomPermissions && (
+          <div className="border border-dark-500 rounded-md p-4 bg-dark-800">
+            <PermissionsEditor permissions={permissions} onChange={setPermissions} />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            Send Invitation
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -203,82 +186,66 @@ function EditMemberModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Edit Member</h2>
-          <p className="text-gray-600 mb-4">
-            {member.user_email}
-            {member.user_first_name && ` (${member.user_first_name} ${member.user_last_name || ''})`}
-          </p>
+    <Modal isOpen onClose={onClose} title="Edit Member">
+      <p className="text-dark-100 mb-4">
+        {member.user_email}
+        {member.user_first_name && ` (${member.user_first_name} ${member.user_last_name || ''})`}
+      </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-              <select
-                value={role}
-                onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'member')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="member">Member</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Select
+          label="Role"
+          value={role}
+          onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'member')}
+          options={[
+            { value: 'member', label: 'Member' },
+            { value: 'admin', label: 'Administrator' },
+          ]}
+        />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+        <Select
+          label="Status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
+        />
 
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showCustomPermissions}
-                  onChange={(e) => {
-                    setShowCustomPermissions(e.target.checked);
-                    if (!e.target.checked) {
-                      setPermissions(DEFAULT_PERMISSIONS[role]);
-                    }
-                  }}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Customize permissions</span>
-              </label>
-            </div>
-
-            {showCustomPermissions && (
-              <div className="border rounded-md p-4 bg-gray-50">
-                <PermissionsEditor permissions={permissions} onChange={setPermissions} />
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showCustomPermissions}
+              onChange={(e) => {
+                setShowCustomPermissions(e.target.checked);
+                if (!e.target.checked) {
+                  setPermissions(DEFAULT_PERMISSIONS[role]);
+                }
+              }}
+              className="rounded border-dark-400 bg-dark-600 text-accent focus:ring-accent"
+            />
+            <span className="text-sm text-dark-100">Customize permissions</span>
+          </label>
         </div>
-      </div>
-    </div>
+
+        {showCustomPermissions && (
+          <div className="border border-dark-500 rounded-md p-4 bg-dark-800">
+            <PermissionsEditor permissions={permissions} onChange={setPermissions} />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -335,11 +302,11 @@ export default function TeamManagement() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div>
         <div className="max-w-4xl mx-auto">
           <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="h-8 bg-dark-600 rounded w-1/4 mb-6"></div>
+            <div className="h-64 bg-dark-600 rounded"></div>
           </div>
         </div>
       </div>
@@ -348,9 +315,9 @@ export default function TeamManagement() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div>
         <div className="max-w-4xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-400">
             Failed to load team members. Please try again.
           </div>
         </div>
@@ -361,76 +328,73 @@ export default function TeamManagement() {
   const members = data?.members || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div>
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Team Management</h1>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h1 className="text-2xl font-bold text-white">Team Management</h1>
+          <Button onClick={() => setShowInviteModal(true)}>
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Invite Member
-          </button>
+          </Button>
         </div>
 
         {inviteMutation.error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 mb-4">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-400 text-sm mb-4">
             {(inviteMutation.error as Error).message || 'Failed to invite member'}
           </div>
         )}
 
         {updateMutation.error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 mb-4">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-400 text-sm mb-4">
             {(updateMutation.error as Error).message || 'Failed to update member'}
           </div>
         )}
 
         {removeMutation.error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 mb-4">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-400 text-sm mb-4">
             {(removeMutation.error as Error).message || 'Failed to remove member'}
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+        <div className="bg-dark-700 rounded-lg border border-dark-500 overflow-hidden">
+          <table className="min-w-full divide-y divide-dark-400">
+            <thead className="bg-dark-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-100 uppercase tracking-wider">
                   Member
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-100 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-100 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-dark-100 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="bg-dark-700 divide-y divide-dark-500">
               {members.map((member) => (
-                <tr key={member.id} className="hover:bg-gray-50">
+                <tr key={member.id} className="hover:bg-dark-600 transition-colors">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-white">
                         {member.user_first_name || member.user_last_name
                           ? `${member.user_first_name || ''} ${member.user_last_name || ''}`.trim()
                           : member.user_email}
                       </div>
-                      <div className="text-sm text-gray-500">{member.user_email}</div>
+                      <div className="text-sm text-dark-100">{member.user_email}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                         member.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-purple-900/50 text-purple-400'
+                          : 'bg-dark-500 text-dark-100'
                       }`}
                     >
                       {member.role === 'admin' ? 'Administrator' : 'Member'}
@@ -440,10 +404,10 @@ export default function TeamManagement() {
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                         member.status === 'active'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-900/50 text-green-400'
                           : member.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-yellow-900/50 text-yellow-400'
+                          : 'bg-dark-500 text-dark-200'
                       }`}
                     >
                       {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
@@ -451,16 +415,16 @@ export default function TeamManagement() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     {member.user_id !== user?.id && (
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-3">
                         <button
                           onClick={() => setEditingMember(member)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          className="text-accent hover:text-accent-light text-sm font-medium transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleRemove(member.id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
                           disabled={removeMutation.isPending}
                         >
                           Remove
@@ -468,14 +432,14 @@ export default function TeamManagement() {
                       </div>
                     )}
                     {member.user_id === user?.id && (
-                      <span className="text-sm text-gray-400">You</span>
+                      <span className="text-sm text-dark-200">You</span>
                     )}
                   </td>
                 </tr>
               ))}
               {members.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-8 text-center text-dark-100">
                     No team members yet. Invite your first team member!
                   </td>
                 </tr>

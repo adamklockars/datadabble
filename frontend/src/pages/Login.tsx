@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { login } from '../api'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import SocialLoginButtons from '../components/SocialLoginButtons'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -79,6 +80,8 @@ export default function Login() {
           <Button type="submit" className="w-full" loading={loading}>
             Sign in
           </Button>
+
+          <SocialLoginButtons />
         </form>
       </div>
     </div>

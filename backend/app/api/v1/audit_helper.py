@@ -3,10 +3,10 @@ from app.models import AuditLog
 
 
 def log_action(
-    database,
-    user,
-    action,
-    resource_type,
+    database=None,
+    user=None,
+    action=None,
+    resource_type=None,
     resource_id=None,
     resource_name=None,
     previous_state=None,
@@ -14,6 +14,7 @@ def log_action(
     changes=None,
     details=None,
     database_slug=None,  # Override for when database is being deleted
+    account=None,  # Account reference for cross-database queries
 ):
     """Create an audit log entry."""
     # Determine database_slug
@@ -24,7 +25,12 @@ def log_action(
     else:
         slug = "deleted"
 
+    # Determine account from database if not explicitly provided
+    if account is None and database and hasattr(database, "account"):
+        account = database.account
+
     audit_log = AuditLog(
+        account=account,
         database=database,
         database_slug=slug,
         user=user,

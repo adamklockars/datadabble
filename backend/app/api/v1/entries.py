@@ -12,6 +12,7 @@ from app.models import Database, Entry, Field
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 from app.api.v1.permissions import check_permission
 from app.api.v1.filter_parser import parse_filter, ast_to_mongo_query, FilterParseError
+from app.api.v1.notification_service import notify_account_members
 
 
 def get_database_or_404(slug):
@@ -138,6 +139,21 @@ def create_entry(slug):
         details=f"Created entry with {len(entry.values)} values",
     )
 
+    # Notify account members (entry notifications are opt-in)
+    if database.account:
+        notify_account_members(
+            account=database.account,
+            notification_type="entry_created",
+            title=f"New entry in {database.title}",
+            message=f"{current_user.email} added an entry to '{database.title}'",
+            link=f"/databases/{database.slug}",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=database.slug,
+            resource_type="entry",
+            resource_id=entry.id,
+        )
+
     return jsonify({
         "message": "Entry created successfully",
         "entry": EntrySchema().dump(entry.to_dict()),
@@ -208,6 +224,20 @@ def update_entry(slug, entry_id):
         details=f"Updated entry",
     )
 
+    if database.account:
+        notify_account_members(
+            account=database.account,
+            notification_type="entry_updated",
+            title=f"Entry updated in {database.title}",
+            message=f"{current_user.email} updated an entry in '{database.title}'",
+            link=f"/databases/{database.slug}",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=database.slug,
+            resource_type="entry",
+            resource_id=entry.id,
+        )
+
     return jsonify({
         "message": "Entry updated successfully",
         "entry": EntrySchema().dump(entry.to_dict()),
@@ -245,6 +275,20 @@ def delete_entry(slug, entry_id):
         previous_state={"values": previous_values},
         details=f"Deleted entry",
     )
+
+    if database.account:
+        notify_account_members(
+            account=database.account,
+            notification_type="entry_deleted",
+            title=f"Entry deleted from {database.title}",
+            message=f"{current_user.email} deleted an entry from '{database.title}'",
+            link=f"/databases/{database.slug}",
+            actor=current_user,
+            exclude_user=current_user,
+            database_slug=database.slug,
+            resource_type="entry",
+            resource_id=entry_id_str,
+        )
 
     entry.delete()
 

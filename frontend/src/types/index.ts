@@ -1,9 +1,19 @@
+export interface SocialAccount {
+  provider: 'google' | 'github'
+  provider_user_id: string
+  email: string
+  name: string
+  avatar_url: string
+  connected_at: string
+}
+
 export interface User {
   id: string
   email: string
   first_name?: string
   last_name?: string
   active_account_id?: string
+  social_accounts?: SocialAccount[]
   created_at: string
   updated_at: string
 }

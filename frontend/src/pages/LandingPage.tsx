@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useAuthStore } from '../store/authStore'
 
 function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
   return (
@@ -101,6 +102,8 @@ function FloatingShape({ className }: { className: string }) {
 }
 
 export default function LandingPage() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+
   return (
     <div className="min-h-screen bg-dark-900 overflow-hidden">
       {/* Floating background shapes */}
@@ -120,15 +123,29 @@ export default function LandingPage() {
             <span className="text-2xl font-bold text-white">DataDabble</span>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-dark-100 hover:text-white transition-colors">
-              Sign In
-            </Link>
-            <Link
-              to="/register"
-              className="px-5 py-2 bg-gradient-to-r from-accent to-purple-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-            >
-              Get Started Free
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to="/dashboard"
+                className="px-5 py-2 bg-gradient-to-r from-accent to-purple-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+              >
+                Open App
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="text-dark-100 hover:text-white transition-colors">
+                  Sign In
+                </Link>
+                <Link
+                  to="/register"
+                  className="px-5 py-2 bg-gradient-to-r from-accent to-purple-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+                >
+                  Get Started Free
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

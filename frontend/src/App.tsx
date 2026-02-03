@@ -9,6 +9,10 @@ import DatabaseSpreadsheet from './pages/DatabaseSpreadsheet'
 import Visualizations from './pages/Visualizations'
 import VisualizationDetail from './pages/VisualizationDetail'
 import TeamManagement from './pages/TeamManagement'
+import AuditLogs from './pages/AuditLogs'
+import OAuthCallback from './pages/OAuthCallback'
+import Notifications from './pages/Notifications'
+import NotificationPreferences from './pages/NotificationPreferences'
 import Layout from './components/Layout'
 import ToastContainer from './components/Toast'
 
@@ -33,12 +37,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function HomeRoute() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
-  }
-
   return <LandingPage />
 }
 
@@ -58,6 +56,7 @@ function App() {
             <Register />
           </PublicRoute>
         } />
+        <Route path="/auth/callback/:provider" element={<OAuthCallback />} />
         <Route element={
           <ProtectedRoute>
             <Layout />
@@ -69,6 +68,9 @@ function App() {
           <Route path="databases/:slug" element={<DatabaseDetail />} />
           <Route path="databases/:slug/spreadsheet" element={<DatabaseSpreadsheet />} />
           <Route path="team" element={<TeamManagement />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="settings/notifications" element={<NotificationPreferences />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -22,6 +22,10 @@ class AuditLog(db.Document):
     """Audit log document model - tracks all changes to databases."""
 
     created_at = db.DateTimeField(default=datetime.datetime.utcnow, required=True)
+    account = db.ReferenceField(
+        document_type="Account",
+        required=False  # Optional for legacy logs without account
+    )
     database = db.ReferenceField(
         document_type="Database",
         reverse_delete_rule=CASCADE,
@@ -48,6 +52,8 @@ class AuditLog(db.Document):
             "user",
             "action",
             {"fields": ["database_slug", "-created_at"]},
+            {"fields": ["account", "-created_at"]},
+            {"fields": ["account", "user", "-created_at"]},
         ],
         "ordering": ["-created_at"],
     }
@@ -64,6 +70,7 @@ class AuditLog(db.Document):
         return {
             "id": str(self.id),
             "created_at": format_datetime(self.created_at),
+            "account_id": str(self.account.id) if self.account else None,
             "database_id": str(self.database.id) if self.database else None,
             "database_slug": self.database_slug,
             "user_id": str(self.user.id) if self.user else None,

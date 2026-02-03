@@ -33,6 +33,24 @@ class Config:
     # AI settings (Anthropic Claude)
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
+    # OAuth settings
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:5173/auth/callback/google")
+
+    GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
+    GITHUB_REDIRECT_URI = os.environ.get("GITHUB_REDIRECT_URI", "http://localhost:5173/auth/callback/github")
+
+    # Email settings
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "localhost")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", 587))
+    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "")
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@datadabble.com")
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5173")
+
 
 class DevelopmentConfig(Config):
     """Development configuration."""

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { logout } from '../api'
+import NotificationBell from './NotificationBell'
 
 export default function Header() {
   const { user, logout: clearAuth } = useAuthStore()
@@ -24,6 +25,7 @@ export default function Header() {
           </Link>
 
           <div className="flex items-center space-x-4">
+            <NotificationBell />
             <span className="text-sm text-dark-100">
               {user?.email}
             </span>
