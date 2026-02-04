@@ -1,0 +1,107 @@
+export interface SocialAccount {
+  provider: 'google' | 'github'
+  provider_user_id: string
+  email: string
+  name: string
+  avatar_url: string
+  connected_at: string
+}
+
+export interface User {
+  id: string
+  email: string
+  first_name?: string
+  last_name?: string
+  active_account_id?: string
+  social_accounts?: SocialAccount[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Database {
+  id: string
+  title: string
+  slug: string
+  description?: string
+  user_id: string
+  fields?: Field[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Field {
+  id: string
+  database_id: string
+  name: string
+  field_type: FieldType
+  required: boolean
+  default_value?: unknown
+  order: number
+  created_at: string
+  updated_at: string
+}
+
+export type FieldType = 'BOOL' | 'INT' | 'DEC' | 'STR' | 'DATE' | 'EMAIL' | 'URL' | 'DICT' | 'LIST'
+
+export interface Entry {
+  id: string
+  database_id: string
+  values: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface Pagination {
+  page: number
+  per_page: number
+  total: number
+  pages: number
+}
+
+export interface AuthResponse {
+  message: string
+  user: User
+  access_token: string
+  refresh_token: string
+}
+
+export interface ApiError {
+  error: string
+  message?: string
+  messages?: Record<string, string[]>
+}
+
+export type ChartType = 'bar' | 'line' | 'pie'
+export type AggregationType = 'count' | 'sum'
+
+export interface Visualization {
+  id: string
+  title: string
+  chart_type: ChartType
+  database_slugs: string[]
+  x_field: string
+  y_field: string | null
+  aggregation: AggregationType
+  created_at: string
+  updated_at: string
+}
+
+export interface ChartDataPoint {
+  name: string
+  value: number
+}
+
+export interface ChartDataSeries {
+  database_slug: string
+  database_title: string
+  data: ChartDataPoint[]
+}
+
+export interface VisualizationData {
+  labels: string[]
+  series: ChartDataSeries[]
+  chart_type?: ChartType
+  x_field?: string
+  y_field?: string | null
+  aggregation?: AggregationType
+}

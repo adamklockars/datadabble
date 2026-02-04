@@ -1,0 +1,39 @@
+# Flask and extensions
+Flask>=3.0.0
+flask-mongoengine>=1.0.0,<2.0.0
+flask-jwt-extended>=4.6.0
+flask-cors>=4.0.0
+flask-marshmallow>=1.2.0
+
+# Database
+mongoengine>=0.27.0,<0.29.0
+pymongo>=4.6.0,<4.8.0
+
+# Validation
+marshmallow>=3.20.0
+
+# Security
+bcrypt>=4.1.0
+python-dotenv>=1.0.0
+
+# OAuth
+Authlib>=1.3.0
+requests>=2.31.0
+
+# Email
+Flask-Mail>=0.10.0
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=4.1.0
+mongomock>=4.1.0
+
+# AI
+anthropic>=0.18.0
+
+# Billing
+stripe>=8.0.0
+
+# Development
+black>=24.0.0
+flake8>=7.0.0
