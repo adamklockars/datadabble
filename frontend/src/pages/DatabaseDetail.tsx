@@ -26,7 +26,9 @@ import { getInsights, askQuestion } from '../api/ai'
 import { getAuditLogs, ACTION_LABELS, RESOURCE_TYPE_LABELS, type AuditLog } from '../api/audit'
 import { Button, Modal, Input, Select, Table, Loading } from '../components/ui'
 import EntryFilter from '../components/EntryFilter'
+import UpgradeBanner, { extractPlanLimitError } from '../components/UpgradeBanner'
 import type { Field, Entry, FieldType } from '../types'
+import type { PlanLimitError } from '../types/billing'
 
 const FIELD_TYPE_OPTIONS = [
   { value: 'STR', label: 'String' },
@@ -413,6 +415,9 @@ export default function DatabaseDetail() {
   const [isLoadingAnswer, setIsLoadingAnswer] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
+  // Plan limit state
+  const [planLimitError, setPlanLimitError] = useState<PlanLimitError | null>(null)
+
   // Audit log state
   const [isAuditPanelOpen, setIsAuditPanelOpen] = useState(false)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -454,6 +459,14 @@ export default function DatabaseDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fields', slug] })
       closeFieldModal()
+      setPlanLimitError(null)
+    },
+    onError: (err) => {
+      const limitErr = extractPlanLimitError(err)
+      if (limitErr) {
+        setPlanLimitError(limitErr)
+        closeFieldModal()
+      }
     },
   })
 
@@ -481,6 +494,14 @@ export default function DatabaseDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', slug] })
       closeEntryModal()
+      setPlanLimitError(null)
+    },
+    onError: (err) => {
+      const limitErr = extractPlanLimitError(err)
+      if (limitErr) {
+        setPlanLimitError(limitErr)
+        closeEntryModal()
+      }
     },
   })
 
@@ -814,6 +835,8 @@ export default function DatabaseDetail() {
 
   return (
     <div>
+      <UpgradeBanner error={planLimitError} onDismiss={() => setPlanLimitError(null)} />
+
       <div className="mb-8">
         <div className="flex justify-between items-start">
           <div>

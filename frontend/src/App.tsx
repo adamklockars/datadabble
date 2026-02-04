@@ -13,6 +13,10 @@ import AuditLogs from './pages/AuditLogs'
 import OAuthCallback from './pages/OAuthCallback'
 import Notifications from './pages/Notifications'
 import NotificationPreferences from './pages/NotificationPreferences'
+import Billing from './pages/Billing'
+import DeveloperPortal from './pages/DeveloperPortal'
+import DeveloperClients from './pages/DeveloperClients'
+import OAuthConsent from './pages/OAuthConsent'
 import Layout from './components/Layout'
 import ToastContainer from './components/Toast'
 
@@ -57,6 +61,7 @@ function App() {
           </PublicRoute>
         } />
         <Route path="/auth/callback/:provider" element={<OAuthCallback />} />
+        <Route path="/oauth2/authorize" element={<OAuthConsent />} />
         <Route element={
           <ProtectedRoute>
             <Layout />
@@ -69,8 +74,11 @@ function App() {
           <Route path="databases/:slug/spreadsheet" element={<DatabaseSpreadsheet />} />
           <Route path="team" element={<TeamManagement />} />
           <Route path="audit-logs" element={<AuditLogs />} />
+          <Route path="billing" element={<Billing />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="settings/notifications" element={<NotificationPreferences />} />
+          <Route path="developer" element={<DeveloperPortal />} />
+          <Route path="developer/clients" element={<DeveloperClients />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

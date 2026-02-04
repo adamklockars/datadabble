@@ -11,6 +11,7 @@ from app.api.schemas import FieldSchema, FieldCreateSchema, FieldUpdateSchema
 from app.models import Database, Field, Entry
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 from app.api.v1.permissions import check_permission
+from app.api.v1.plan_limits import check_plan_limit
 
 
 def can_convert_value(value, from_type, to_type):
@@ -149,6 +150,7 @@ def list_fields(slug):
 @api_v1.route("/databases/<slug>/fields", methods=["POST"])
 @jwt_required()
 @check_permission("field", "create")
+@check_plan_limit("field")
 def create_field(slug):
     """Create a new field in a database."""
     database = get_database_or_404(slug)

@@ -10,6 +10,10 @@ from app.models.audit_log import AuditLog, ACTION_TYPES
 from app.models.visualization import Visualization, CHART_TYPES, AGGREGATIONS
 from app.models.notification import Notification, NOTIFICATION_TYPES
 from app.models.notification_preference import NotificationPreference, NotificationChannel
+from app.models.subscription import Subscription, SUBSCRIPTION_STATUSES
+from app.models.oauth_client import OAuthClient
+from app.models.oauth_authorization_code import OAuthAuthorizationCode
+from app.models.oauth_token import OAuthToken
 
 __all__ = [
     "SocialAccount",
@@ -33,4 +37,9 @@ __all__ = [
     "NOTIFICATION_TYPES",
     "NotificationPreference",
     "NotificationChannel",
+    "Subscription",
+    "SUBSCRIPTION_STATUSES",
+    "OAuthClient",
+    "OAuthAuthorizationCode",
+    "OAuthToken",
 ]

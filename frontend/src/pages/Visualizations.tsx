@@ -10,7 +10,9 @@ import {
   getDatabase,
 } from '../api'
 import { Button, Modal, Input, Select, Loading } from '../components/ui'
+import UpgradeBanner, { extractPlanLimitError } from '../components/UpgradeBanner'
 import type { Visualization, Database, ChartType } from '../types'
+import type { PlanLimitError } from '../types/billing'
 
 const CHART_TYPE_OPTIONS: { value: ChartType; label: string }[] = [
   { value: 'bar', label: 'Bar chart' },
@@ -46,6 +48,7 @@ export default function Visualizations() {
   const [xField, setXField] = useState('')
   const [yField, setYField] = useState('')
   const [aggregation, setAggregation] = useState<'count' | 'sum'>('count')
+  const [planLimitError, setPlanLimitError] = useState<PlanLimitError | null>(null)
 
   const { data: visualizations = [], isLoading, error } = useQuery({
     queryKey: ['visualizations'],
@@ -70,6 +73,14 @@ export default function Visualizations() {
       setIsFormModalOpen(false)
       setEditingViz(null)
       resetForm()
+      setPlanLimitError(null)
+    },
+    onError: (err) => {
+      const limitErr = extractPlanLimitError(err)
+      if (limitErr) {
+        setPlanLimitError(limitErr)
+        setIsFormModalOpen(false)
+      }
     },
   })
 
@@ -184,6 +195,8 @@ export default function Visualizations() {
 
   return (
     <div>
+      <UpgradeBanner error={planLimitError} onDismiss={() => setPlanLimitError(null)} />
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-white">Data Visualizations</h1>
         <Button onClick={openCreateModal}>

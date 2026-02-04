@@ -12,6 +12,8 @@ import {
 } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { Button, Modal, Input, Select } from '../components/ui';
+import UpgradeBanner, { extractPlanLimitError } from '../components/UpgradeBanner';
+import type { PlanLimitError } from '../types/billing';
 
 function PermissionsEditor({
   permissions,
@@ -254,6 +256,7 @@ export default function TeamManagement() {
   const { user } = useAuthStore();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Membership | null>(null);
+  const [planLimitError, setPlanLimitError] = useState<PlanLimitError | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['members'],
@@ -265,6 +268,14 @@ export default function TeamManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['members'] });
       setShowInviteModal(false);
+      setPlanLimitError(null);
+    },
+    onError: (err) => {
+      const limitErr = extractPlanLimitError(err);
+      if (limitErr) {
+        setPlanLimitError(limitErr);
+        setShowInviteModal(false);
+      }
     },
   });
 
@@ -330,6 +341,8 @@ export default function TeamManagement() {
   return (
     <div>
       <div className="max-w-4xl mx-auto">
+        <UpgradeBanner error={planLimitError} onDismiss={() => setPlanLimitError(null)} />
+
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-white">Team Management</h1>
           <Button onClick={() => setShowInviteModal(true)}>

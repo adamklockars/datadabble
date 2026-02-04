@@ -31,7 +31,7 @@ const CHART_COLORS = [
 ]
 
 function buildBarLineData(series: ChartDataSeries[]) {
-  const labelMap = new Map<string, Record<string, number>>()
+  const labelMap = new Map<string, Record<string, string | number>>()
   for (const s of series) {
     for (const point of s.data) {
       if (!labelMap.has(point.name)) {
@@ -122,7 +122,7 @@ export default function VisualizationDetail() {
                 cx="50%"
                 cy="50%"
                 outerRadius={140}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
               >
                 {series[0].data.map((_, i) => (
                   <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -130,7 +130,7 @@ export default function VisualizationDetail() {
               </Pie>
               <Tooltip
                 contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}
-                formatter={(value: number) => [value, '']}
+                formatter={(value) => [value, '']}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -138,7 +138,7 @@ export default function VisualizationDetail() {
 
         {chartType === 'pie' && series.length > 1 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {series.map((s, idx) => (
+            {series.map((s) => (
               <div key={s.database_slug}>
                 <h3 className="text-sm font-medium text-dark-100 mb-2">{s.database_title}</h3>
                 <ResponsiveContainer width="100%" height={280}>
@@ -150,7 +150,7 @@ export default function VisualizationDetail() {
                       cx="50%"
                       cy="50%"
                       outerRadius={100}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
                     >
                       {s.data.map((_, i) => (
                         <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -158,7 +158,7 @@ export default function VisualizationDetail() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}
-                      formatter={(value: number) => [value, '']}
+                      formatter={(value) => [value, '']}
                     />
                   </PieChart>
                 </ResponsiveContainer>

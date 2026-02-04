@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
+import { usePlans } from '../hooks/useBilling'
+import type { StripePrice } from '../types/billing'
 
 function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
   return (
@@ -98,6 +101,177 @@ function MockAI() {
 function FloatingShape({ className }: { className: string }) {
   return (
     <div className={`absolute rounded-full blur-3xl opacity-20 ${className}`} />
+  )
+}
+
+function formatPrice(amount: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 0,
+  }).format(amount / 100)
+}
+
+function PricingSection() {
+  const { data: plans, isLoading } = usePlans()
+  const [interval, setInterval] = useState<'month' | 'year'>('month')
+
+  if (isLoading || !plans) return null
+
+  const monthlyPrices = plans.pro.prices.filter((p: StripePrice) => p.interval === 'month')
+  const yearlyPrices = plans.pro.prices.filter((p: StripePrice) => p.interval === 'year')
+  const activePrices = interval === 'year' ? yearlyPrices : monthlyPrices
+  const hasToggle = monthlyPrices.length > 0 && yearlyPrices.length > 0
+
+  return (
+    <section id="pricing" className="relative z-10 px-6 py-24">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-bold text-white mb-4">Simple, transparent pricing</h2>
+          <p className="text-xl text-dark-100 max-w-2xl mx-auto">
+            Start free and upgrade when you need more power.
+          </p>
+        </div>
+
+        {hasToggle && (
+          <div className="flex justify-center gap-2 mb-10">
+            <button
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                interval === 'month' ? 'bg-accent text-white' : 'bg-dark-700 text-dark-100 hover:text-white'
+              }`}
+              onClick={() => setInterval('month')}
+            >
+              Monthly
+            </button>
+            <button
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                interval === 'year' ? 'bg-accent text-white' : 'bg-dark-700 text-dark-100 hover:text-white'
+              }`}
+              onClick={() => setInterval('year')}
+            >
+              Annual
+            </button>
+          </div>
+        )}
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          {/* Free card */}
+          <div className="bg-dark-700/50 backdrop-blur border border-dark-500 rounded-2xl p-8">
+            <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
+            <div className="text-4xl font-bold text-white mb-1">
+              $0<span className="text-base font-normal text-dark-100">/month</span>
+            </div>
+            <p className="text-dark-100 mb-6">For individuals getting started</p>
+            <ul className="space-y-3 text-sm text-dark-100 mb-8">
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Up to {plans.free.limits.max_databases} databases
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Up to {plans.free.limits.max_entries_per_db} entries per database
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Up to {plans.free.limits.max_fields_per_db} fields per database
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Up to {plans.free.limits.max_members} team members
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                {plans.free.limits.ai_queries_per_day} AI queries per day
+              </li>
+            </ul>
+            <Link
+              to="/register"
+              className="block w-full text-center px-6 py-3 bg-dark-600 text-white rounded-xl font-medium hover:bg-dark-500 transition-colors"
+            >
+              Get Started Free
+            </Link>
+          </div>
+
+          {/* Pro card */}
+          <div className="bg-dark-700/50 backdrop-blur border border-accent/50 rounded-2xl p-8 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-accent text-white text-xs font-semibold rounded-full">
+              POPULAR
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
+            {activePrices.length > 0 ? (
+              <div className="text-4xl font-bold text-white mb-1">
+                {formatPrice(activePrices[0].unit_amount, activePrices[0].currency)}
+                <span className="text-base font-normal text-dark-100">/{activePrices[0].interval}</span>
+              </div>
+            ) : (
+              <div className="text-4xl font-bold text-white mb-1">
+                Pro<span className="text-base font-normal text-dark-100"> pricing</span>
+              </div>
+            )}
+            {interval === 'year' && activePrices.length > 0 && (
+              <p className="text-sm text-dark-200 mb-1">
+                {formatPrice(Math.round(activePrices[0].unit_amount / 12), activePrices[0].currency)}/month equivalent
+              </p>
+            )}
+            <p className="text-dark-100 mb-6">For teams that need more</p>
+            <ul className="space-y-3 text-sm text-dark-100 mb-8">
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited databases
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited entries per database
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited fields per database
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited team members
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited AI queries
+              </li>
+              <li className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Unlimited visualizations
+              </li>
+            </ul>
+            <Link
+              to="/register"
+              className="block w-full text-center px-6 py-3 bg-gradient-to-r from-accent to-purple-500 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
+            >
+              Upgrade to Pro
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -310,6 +484,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Pricing Section */}
+      <PricingSection />
 
       {/* CTA Section */}
       <section className="relative z-10 px-6 py-24">

@@ -13,6 +13,7 @@ from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_a
 from app.api.v1.permissions import check_permission
 from app.api.v1.filter_parser import parse_filter, ast_to_mongo_query, FilterParseError
 from app.api.v1.notification_service import notify_account_members
+from app.api.v1.plan_limits import check_plan_limit
 
 
 def get_database_or_404(slug):
@@ -109,6 +110,7 @@ def validate_filter(slug):
 @api_v1.route("/databases/<slug>/entries", methods=["POST"])
 @jwt_required()
 @check_permission("entry", "create")
+@check_plan_limit("entry")
 def create_entry(slug):
     """Create a new entry in a database."""
     database = get_database_or_404(slug)

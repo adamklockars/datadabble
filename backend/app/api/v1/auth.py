@@ -12,6 +12,7 @@ from marshmallow import ValidationError
 from app.api.v1 import api_v1
 from app.api.schemas import UserCreateSchema, UserLoginSchema, UserSchema
 from app.models import User, Account, AccountMembership, ResourcePermissions
+from app.api.v1.plan_limits import get_account_plan, get_plan_limits, get_account_usage
 
 # Token blocklist for logout
 token_blocklist = set()
@@ -219,5 +220,10 @@ def get_current_user():
         ).first()
         if membership:
             response["membership"] = membership.to_dict()
+
+    # Include plan info
+    plan = get_account_plan(user.active_account)
+    response["plan"] = plan
+    response["plan_limits"] = get_plan_limits(plan)
 
     return jsonify(response), 200

@@ -10,6 +10,7 @@ from app.models import Database, Field, Entry
 from app.api.v1.audit_helper import log_action, compute_changes, serialize_for_audit
 from app.api.v1.permissions import check_permission
 from app.api.v1.notification_service import notify_account_members
+from app.api.v1.plan_limits import check_plan_limit
 
 
 @api_v1.route("/databases", methods=["GET"])
@@ -29,6 +30,7 @@ def list_databases():
 @api_v1.route("/databases", methods=["POST"])
 @jwt_required()
 @check_permission("database", "create")
+@check_plan_limit("database")
 def create_database():
     """Create a new database."""
     schema = DatabaseCreateSchema()

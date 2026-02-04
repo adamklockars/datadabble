@@ -15,6 +15,7 @@ from app.api.schemas import (
     VisualizationUpdateSchema,
 )
 from app.models import Database, Entry, Visualization
+from app.api.v1.plan_limits import check_plan_limit
 
 # Special x_field values for entry timestamps (grouped by day)
 X_FIELD_CREATED_AT = "__created_at__"
@@ -81,6 +82,7 @@ def list_visualizations():
 
 @api_v1.route("/visualizations", methods=["POST"])
 @jwt_required()
+@check_plan_limit("visualization")
 def create_visualization():
     """Create a new visualization."""
     schema = VisualizationCreateSchema()

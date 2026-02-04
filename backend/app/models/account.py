@@ -10,6 +10,7 @@ class Account(db.Document):
     updated_at = db.DateTimeField(default=datetime.datetime.utcnow, required=True)
     name = db.StringField(max_length=200, required=True)
     owner = db.ReferenceField(document_type="User", required=True)
+    stripe_customer_id = db.StringField(unique=True, sparse=True)
 
     meta = {
         "collection": "accounts",
@@ -35,6 +36,7 @@ class Account(db.Document):
             "id": str(self.id),
             "name": self.name,
             "owner_id": str(self.owner.id) if self.owner else None,
+            "stripe_customer_id": self.stripe_customer_id,
             "created_at": format_datetime(self.created_at),
             "updated_at": format_datetime(self.updated_at),
         }

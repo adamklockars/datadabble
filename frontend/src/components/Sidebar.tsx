@@ -79,6 +79,19 @@ export default function Sidebar() {
             Notifications
           </Link>
           <Link
+            to="/billing"
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors mt-1 ${
+              location.pathname === '/billing'
+                ? 'bg-dark-500 text-accent'
+                : 'text-dark-100 hover:text-white hover:bg-dark-600'
+            }`}
+          >
+            <svg className="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+            Billing
+          </Link>
+          <Link
             to="/settings/notifications"
             className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors mt-1 ${
               location.pathname === '/settings/notifications'
@@ -92,6 +105,52 @@ export default function Sidebar() {
             </svg>
             Settings
           </Link>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="px-3 text-xs font-semibold text-dark-100 uppercase tracking-wider mb-2">
+            Developer
+          </h3>
+          <Link
+            to="/developer"
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              location.pathname === '/developer'
+                ? 'bg-dark-500 text-accent'
+                : 'text-dark-100 hover:text-white hover:bg-dark-600'
+            }`}
+          >
+            <svg className="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            Developer Portal
+          </Link>
+          <Link
+            to="/developer/clients"
+            className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors mt-1 ${
+              location.pathname === '/developer/clients'
+                ? 'bg-dark-500 text-accent'
+                : 'text-dark-100 hover:text-white hover:bg-dark-600'
+            }`}
+          >
+            <svg className="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            OAuth Clients
+          </Link>
+          <a
+            href="/api/docs/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors mt-1 text-dark-100 hover:text-white hover:bg-dark-600"
+          >
+            <svg className="mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            API Docs
+            <svg className="ml-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
         </div>
 
         <div>

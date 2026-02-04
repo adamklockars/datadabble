@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getDatabases, createDatabase, deleteDatabase } from '../api'
 import { Button, Modal, Input, Loading } from '../components/ui'
+import UpgradeBanner, { extractPlanLimitError } from '../components/UpgradeBanner'
+import type { PlanLimitError } from '../types/billing'
 import type { Database } from '../types'
 
 export default function Dashboard() {
@@ -12,6 +14,7 @@ export default function Dashboard() {
   const [selectedDatabase, setSelectedDatabase] = useState<Database | null>(null)
   const [newDatabaseTitle, setNewDatabaseTitle] = useState('')
   const [newDatabaseDescription, setNewDatabaseDescription] = useState('')
+  const [planLimitError, setPlanLimitError] = useState<PlanLimitError | null>(null)
 
   const { data: databases = [], isLoading, error } = useQuery({
     queryKey: ['databases'],
@@ -25,6 +28,14 @@ export default function Dashboard() {
       setIsCreateModalOpen(false)
       setNewDatabaseTitle('')
       setNewDatabaseDescription('')
+      setPlanLimitError(null)
+    },
+    onError: (error) => {
+      const limitErr = extractPlanLimitError(error)
+      if (limitErr) {
+        setPlanLimitError(limitErr)
+        setIsCreateModalOpen(false)
+      }
     },
   })
 
@@ -65,6 +76,8 @@ export default function Dashboard() {
 
   return (
     <div>
+      <UpgradeBanner error={planLimitError} onDismiss={() => setPlanLimitError(null)} />
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-white">Databases</h1>
         <Button onClick={() => setIsCreateModalOpen(true)}>

@@ -7,6 +7,7 @@ from app.models import User, Account, AccountMembership, ResourcePermissions, Pe
 from app.api.v1.permissions import get_current_user, require_admin, is_account_admin
 from app.api.v1.audit_helper import log_action
 from app.api.v1.notification_service import create_notification
+from app.api.v1.plan_limits import check_plan_limit
 
 users_bp = Blueprint("users", __name__)
 
@@ -83,6 +84,7 @@ def list_members():
 @users_bp.route("/account/members", methods=["POST"])
 @jwt_required()
 @require_admin()
+@check_plan_limit("member")
 def invite_member():
     """Invite a new member to the account."""
     user = get_current_user()
