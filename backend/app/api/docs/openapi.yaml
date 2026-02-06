@@ -1,0 +1,3159 @@
+openapi: "3.0.3"
+info:
+  title: DataDabble API
+  description: API for creating custom databases with flexible schemas, managing teams, billing, and visualizations.
+  version: "1.0.0"
+  contact:
+    name: DataDabble Support
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: Auth
+    description: Authentication and registration
+  - name: OAuth Social Login
+    description: Social login via Google and GitHub
+  - name: Databases
+    description: Database CRUD operations
+  - name: Fields
+    description: Field management within databases
+  - name: Entries
+    description: Entry CRUD with filtering and pagination
+  - name: Visualizations
+    description: Chart visualizations over database data
+  - name: Users & Team
+    description: Account and team member management
+  - name: Notifications
+    description: User notifications and preferences
+  - name: Audit Logs
+    description: Activity audit trail
+  - name: Billing
+    description: Subscription and billing management via Stripe
+  - name: Developer
+    description: OAuth client management for third-party integrations
+  - name: OAuth 2.0
+    description: OAuth 2.0 authorization server endpoints
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ──────────────────────────────────────────────
+  # Auth
+  # ──────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: s3cur3Pa$$
+                first_name:
+                  type: string
+                  example: Alice
+                last_name:
+                  type: string
+                  example: Smith
+                account_name:
+                  type: string
+                  example: Alice's Workspace
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User registered successfully
+                  user:
+                    $ref: "#/components/schemas/User"
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: Email already registered
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+                password:
+                  type: string
+                  example: s3cur3Pa$$
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: Invalid email or password
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and blocklist current token
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Successfully logged out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: Requires the refresh token in the Authorization header.
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user with account and plan info
+      responses:
+        "200":
+          description: Current user details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/User"
+                  - type: object
+                    properties:
+                      account:
+                        $ref: "#/components/schemas/Account"
+                      membership:
+                        $ref: "#/components/schemas/AccountMembership"
+                      plan:
+                        type: string
+                        example: free
+                      plan_limits:
+                        type: object
+                        additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # OAuth Social Login
+  # ──────────────────────────────────────────────
+  /auth/oauth/{provider}/authorize:
+    get:
+      tags: [OAuth Social Login]
+      summary: Get OAuth redirect URL for a provider
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github]
+      responses:
+        "200":
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authorization_url:
+                    type: string
+                    format: uri
+                  state:
+                    type: string
+        "400":
+          description: Unsupported or unconfigured provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/oauth/{provider}/callback:
+    post:
+      tags: [OAuth Social Login]
+      summary: Exchange OAuth authorization code for tokens
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: Authorization code from OAuth provider
+      responses:
+        "200":
+          description: OAuth login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        "400":
+          description: Invalid code or provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ──────────────────────────────────────────────
+  # Databases
+  # ──────────────────────────────────────────────
+  /databases:
+    get:
+      tags: [Databases]
+      summary: List all databases for current user/account
+      responses:
+        "200":
+          description: Array of databases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Database"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Databases]
+      summary: Create a new database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: Inventory
+                description:
+                  type: string
+                  example: Product inventory tracker
+      responses:
+        "201":
+          description: Database created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  database:
+                    $ref: "#/components/schemas/Database"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Duplicate database title
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: A database with this title already exists
+
+  /databases/{slug}:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+
+    get:
+      tags: [Databases]
+      summary: Get a database with its fields
+      responses:
+        "200":
+          description: Database with fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Database"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Databases]
+      summary: Update a database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: Database updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  database:
+                    $ref: "#/components/schemas/Database"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate title
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags: [Databases]
+      summary: Delete a database and all its fields and entries
+      responses:
+        "200":
+          description: Database deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Database deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # Fields
+  # ──────────────────────────────────────────────
+  /databases/{slug}/fields:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+
+    get:
+      tags: [Fields]
+      summary: List all fields for a database
+      responses:
+        "200":
+          description: Array of fields ordered by position
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Field"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags: [Fields]
+      summary: Create a field in a database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, field_type]
+              properties:
+                name:
+                  type: string
+                  example: price
+                field_type:
+                  $ref: "#/components/schemas/FieldType"
+                required:
+                  type: boolean
+                  default: false
+                default_value:
+                  description: Default value matching field_type
+                order:
+                  type: integer
+                  default: 0
+      responses:
+        "201":
+          description: Field created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  field:
+                    $ref: "#/components/schemas/Field"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate field name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: A field with this name already exists
+
+  /databases/{slug}/fields/{field_id}:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+      - $ref: "#/components/parameters/FieldId"
+
+    get:
+      tags: [Fields]
+      summary: Get a specific field
+      responses:
+        "200":
+          description: Field details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Field"
+        "400":
+          description: Invalid field ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Fields]
+      summary: Update a field
+      description: When changing field_type, existing entry values are converted. If data loss would occur, returns 409 unless confirm_data_loss is true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                field_type:
+                  $ref: "#/components/schemas/FieldType"
+                required:
+                  type: boolean
+                default_value: {}
+                order:
+                  type: integer
+                confirm_data_loss:
+                  type: boolean
+                  description: Set true to force a type change that loses data
+                  default: false
+      responses:
+        "200":
+          description: Field updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  field:
+                    $ref: "#/components/schemas/Field"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate name or type change requires confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  requires_confirmation:
+                    type: boolean
+                  analysis:
+                    type: object
+
+    delete:
+      tags: [Fields]
+      summary: Delete a field
+      responses:
+        "200":
+          description: Field deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Field deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/fields/{field_id}/preview-type-change:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+      - $ref: "#/components/parameters/FieldId"
+    post:
+      tags: [Fields]
+      summary: Preview impact of changing a field's type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [field_type]
+              properties:
+                field_type:
+                  $ref: "#/components/schemas/FieldType"
+      responses:
+        "200":
+          description: Type change analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_entries:
+                    type: integer
+                  entries_with_value:
+                    type: integer
+                  convertible:
+                    type: integer
+                  will_lose_data:
+                    type: integer
+                  affected_entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        entry_id:
+                          type: string
+                        current_value:
+                          type: string
+        "400":
+          description: Missing field_type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/fields/reorder:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+    post:
+      tags: [Fields]
+      summary: Reorder fields in a database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [field_ids]
+              properties:
+                field_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Ordered list of field IDs
+      responses:
+        "200":
+          description: Fields reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  fields:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Field"
+        "400":
+          description: Missing or invalid field_ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # Entries
+  # ──────────────────────────────────────────────
+  /databases/{slug}/entries:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+
+    get:
+      tags: [Entries]
+      summary: List entries with pagination and filtering
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: filter
+          in: query
+          schema:
+            type: string
+          description: "Filter expression, e.g. `status = \"active\" AND price > 10`"
+      responses:
+        "200":
+          description: Paginated entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Entry"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  filter:
+                    type: string
+                    nullable: true
+        "400":
+          description: Invalid filter expression
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags: [Entries]
+      summary: Create an entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  type: object
+                  additionalProperties: true
+                  example:
+                    name: Widget A
+                    price: 9.99
+                    in_stock: true
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  entry:
+                    $ref: "#/components/schemas/Entry"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/entries/{entry_id}:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+      - $ref: "#/components/parameters/EntryId"
+
+    get:
+      tags: [Entries]
+      summary: Get a specific entry
+      responses:
+        "200":
+          description: Entry details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "400":
+          description: Invalid entry ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Entries]
+      summary: Update an entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Entry updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  entry:
+                    $ref: "#/components/schemas/Entry"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Entries]
+      summary: Delete an entry
+      responses:
+        "200":
+          description: Entry deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Entry deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/entries/validate-filter:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+    post:
+      tags: [Entries]
+      summary: Validate a filter expression without executing it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: string
+                  example: status = "active"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  ast:
+                    type: object
+                    description: Parsed AST (when valid)
+                  error:
+                    type: string
+                    description: Parse error message (when invalid)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # Visualizations
+  # ──────────────────────────────────────────────
+  /visualizations:
+    get:
+      tags: [Visualizations]
+      summary: List all visualizations for current user
+      responses:
+        "200":
+          description: Array of visualizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Visualization"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Visualizations]
+      summary: Create a visualization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, chart_type, database_slugs, x_field]
+              properties:
+                title:
+                  type: string
+                  example: Sales by Region
+                chart_type:
+                  $ref: "#/components/schemas/ChartType"
+                database_slugs:
+                  type: array
+                  items:
+                    type: string
+                  example: [sales]
+                x_field:
+                  type: string
+                  example: region
+                y_field:
+                  type: string
+                  example: revenue
+                aggregation:
+                  $ref: "#/components/schemas/Aggregation"
+      responses:
+        "201":
+          description: Visualization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visualization"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Referenced database not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /visualizations/{viz_id}:
+    parameters:
+      - $ref: "#/components/parameters/VizId"
+
+    get:
+      tags: [Visualizations]
+      summary: Get a visualization
+      responses:
+        "200":
+          description: Visualization details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visualization"
+        "400":
+          description: Invalid visualization ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Visualizations]
+      summary: Update a visualization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                chart_type:
+                  $ref: "#/components/schemas/ChartType"
+                database_slugs:
+                  type: array
+                  items:
+                    type: string
+                x_field:
+                  type: string
+                y_field:
+                  type: string
+                aggregation:
+                  $ref: "#/components/schemas/Aggregation"
+      responses:
+        "200":
+          description: Visualization updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Visualization"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Visualizations]
+      summary: Delete a visualization
+      responses:
+        "200":
+          description: Visualization deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Visualization deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /visualizations/{viz_id}/data:
+    parameters:
+      - $ref: "#/components/parameters/VizId"
+    get:
+      tags: [Visualizations]
+      summary: Get chart-ready data for a saved visualization
+      responses:
+        "200":
+          description: Aggregated chart data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChartData"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /visualizations/data:
+    post:
+      tags: [Visualizations]
+      summary: Get ad-hoc chart data for a visualization preview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [database_slugs, x_field]
+              properties:
+                database_slugs:
+                  type: array
+                  items:
+                    type: string
+                x_field:
+                  type: string
+                y_field:
+                  type: string
+                aggregation:
+                  $ref: "#/components/schemas/Aggregation"
+      responses:
+        "200":
+          description: Aggregated chart data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      type: string
+                  series:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChartSeries"
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Referenced database not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ──────────────────────────────────────────────
+  # Users & Team
+  # ──────────────────────────────────────────────
+  /users/account:
+    get:
+      tags: [Users & Team]
+      summary: Get current user's active account
+      responses:
+        "200":
+          description: Account and membership
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    $ref: "#/components/schemas/Account"
+                  membership:
+                    $ref: "#/components/schemas/AccountMembership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/account/members:
+    get:
+      tags: [Users & Team]
+      summary: List members of the current account
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountMembership"
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags: [Users & Team]
+      summary: Invite a member to the account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: bob@example.com
+                role:
+                  type: string
+                  enum: [admin, member]
+                  default: member
+                permissions:
+                  type: object
+                  description: Custom permission overrides
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Member invited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  membership:
+                    $ref: "#/components/schemas/AccountMembership"
+        "400":
+          description: Validation error or already a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /users/account/members/{member_id}:
+    parameters:
+      - $ref: "#/components/parameters/MemberId"
+
+    put:
+      tags: [Users & Team]
+      summary: Update a member's role or permissions (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [admin, member]
+                permissions:
+                  type: object
+                  additionalProperties: true
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        "200":
+          description: Membership updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  membership:
+                    $ref: "#/components/schemas/AccountMembership"
+        "400":
+          description: Cannot remove last admin or deactivate self
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Users & Team]
+      summary: Remove a member from the account (admin only)
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Member removed
+        "400":
+          description: Cannot remove self or last admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/accounts:
+    get:
+      tags: [Users & Team]
+      summary: List all accounts the user belongs to
+      responses:
+        "200":
+          description: User's accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        account:
+                          $ref: "#/components/schemas/Account"
+                        membership:
+                          $ref: "#/components/schemas/AccountMembership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/accounts/switch/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Users & Team]
+      summary: Switch active account
+      responses:
+        "200":
+          description: Switched to account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    $ref: "#/components/schemas/Account"
+                  membership:
+                    $ref: "#/components/schemas/AccountMembership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a member of the account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # Notifications
+  # ──────────────────────────────────────────────
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications for current user
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: unread_only
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+      responses:
+        "200":
+          description: Paginated notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  unread_count:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notification count
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+                    example: 3
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/{notification_id}/read:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    put:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification:
+                    $ref: "#/components/schemas/Notification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: All notifications marked as read
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/{notification_id}:
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      responses:
+        "200":
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Notification deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Get notification preferences
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    $ref: "#/components/schemas/NotificationPreference"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      tags: [Notifications]
+      summary: Update notification preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email_enabled:
+                  type: boolean
+                weekly_digest:
+                  type: boolean
+                team_invites:
+                  $ref: "#/components/schemas/NotificationChannel"
+                database_changes:
+                  $ref: "#/components/schemas/NotificationChannel"
+                entry_modifications:
+                  $ref: "#/components/schemas/NotificationChannel"
+                field_changes:
+                  $ref: "#/components/schemas/NotificationChannel"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    $ref: "#/components/schemas/NotificationPreference"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/unsubscribe/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Notifications]
+      summary: Unsubscribe from email notifications (no auth required)
+      security: []
+      responses:
+        "200":
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: You have been unsubscribed from email notifications.
+        "404":
+          description: Invalid unsubscribe link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ──────────────────────────────────────────────
+  # Audit Logs
+  # ──────────────────────────────────────────────
+  /databases/{slug}/audit-logs:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+    get:
+      tags: [Audit Logs]
+      summary: List audit logs for a specific database
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filter by action type
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+          description: Filter by resource type
+      responses:
+        "200":
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit_logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/audit-logs/export:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+    get:
+      tags: [Audit Logs]
+      summary: Export audit logs as CSV
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /databases/{slug}/audit-logs/stats:
+    parameters:
+      - $ref: "#/components/parameters/DatabaseSlug"
+    get:
+      tags: [Audit Logs]
+      summary: Get audit log statistics for a database
+      responses:
+        "200":
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  by_action:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  by_resource:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: List account-wide audit logs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: user_email
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: database_slug
+          in: query
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audit_logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLog"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          description: No active account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /audit-logs/export:
+    get:
+      tags: [Audit Logs]
+      summary: Export account-wide audit logs as CSV
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: user_email
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: database_slug
+          in: query
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: No active account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /audit-logs/stats:
+    get:
+      tags: [Audit Logs]
+      summary: Get account-wide audit log statistics
+      responses:
+        "200":
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  by_action:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  by_resource:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  by_user:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  by_database:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        "400":
+          description: No active account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /audit-logs/users:
+    get:
+      tags: [Audit Logs]
+      summary: Get distinct user emails from audit logs
+      responses:
+        "200":
+          description: User email list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: string
+                      format: email
+        "400":
+          description: No active account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ──────────────────────────────────────────────
+  # Billing
+  # ──────────────────────────────────────────────
+  /billing/plans:
+    get:
+      tags: [Billing]
+      summary: List available plans and pricing
+      security: []
+      responses:
+        "200":
+          description: Free and Pro plan details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  free:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        example: Free
+                      limits:
+                        type: object
+                        additionalProperties: true
+                  pro:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        example: Pro
+                      prices:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            currency:
+                              type: string
+                            unit_amount:
+                              type: integer
+                              description: Price in cents
+                            interval:
+                              type: string
+                              enum: [month, year]
+                            interval_count:
+                              type: integer
+                            product_name:
+                              type: string
+                      limits:
+                        type: object
+                        additionalProperties: true
+
+  /billing/subscription:
+    get:
+      tags: [Billing]
+      summary: Get current account's subscription details
+      responses:
+        "200":
+          description: Plan, limits, usage, and subscription info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    type: string
+                    example: free
+                  limits:
+                    type: object
+                    additionalProperties: true
+                  usage:
+                    type: object
+                    additionalProperties: true
+                  subscription:
+                    $ref: "#/components/schemas/Subscription"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Create a Stripe Checkout session (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price_id]
+              properties:
+                price_id:
+                  type: string
+                  description: Stripe Price ID
+                  example: price_1abc123
+      responses:
+        "200":
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkout_url:
+                    type: string
+                    format: uri
+        "400":
+          description: Missing price_id or no active account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /billing/portal:
+    post:
+      tags: [Billing]
+      summary: Create a Stripe Customer Portal session (admin only)
+      responses:
+        "200":
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  portal_url:
+                    type: string
+                    format: uri
+        "400":
+          description: No billing account found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      summary: List invoices from Stripe (admin only)
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        number:
+                          type: string
+                        status:
+                          type: string
+                        amount_due:
+                          type: integer
+                        amount_paid:
+                          type: integer
+                        currency:
+                          type: string
+                        created:
+                          type: integer
+                          description: Unix timestamp
+                        hosted_invoice_url:
+                          type: string
+                          format: uri
+                        invoice_pdf:
+                          type: string
+                          format: uri
+                        period_start:
+                          type: integer
+                        period_end:
+                          type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /billing/webhooks:
+    post:
+      tags: [Billing]
+      summary: Handle Stripe webhook events
+      security: []
+      description: Verified via Stripe-Signature header. Handles checkout.session.completed, customer.subscription.created/updated/deleted, invoice.paid, and invoice.payment_failed.
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe event payload
+      responses:
+        "200":
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "400":
+          description: Invalid payload or signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ──────────────────────────────────────────────
+  # Developer
+  # ──────────────────────────────────────────────
+  /developer/scopes:
+    get:
+      tags: [Developer]
+      summary: List all available OAuth scopes
+      responses:
+        "200":
+          description: Available scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: "read:databases"
+                        description:
+                          type: string
+                          example: Read access to databases
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /developer/clients:
+    get:
+      tags: [Developer]
+      summary: List current user's OAuth clients
+      responses:
+        "200":
+          description: OAuth clients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clients:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OAuthClient"
+                  total:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Developer]
+      summary: Create a new OAuth client (returns secret once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: My Integration
+                description:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  example: ["https://myapp.com/callback"]
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  example: ["read:databases", "read:entries"]
+      responses:
+        "201":
+          description: Client created with one-time secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  client:
+                    allOf:
+                      - $ref: "#/components/schemas/OAuthClient"
+                      - type: object
+                        properties:
+                          client_secret:
+                            type: string
+                            description: Only returned on creation
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /developer/clients/{client_id}:
+    parameters:
+      - $ref: "#/components/parameters/OAuthClientId"
+
+    get:
+      tags: [Developer]
+      summary: Get details of an OAuth client
+      responses:
+        "200":
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthClient"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Developer]
+      summary: Update an OAuth client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                active:
+                  type: boolean
+      responses:
+        "200":
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  client:
+                    $ref: "#/components/schemas/OAuthClient"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Developer]
+      summary: Delete an OAuth client and revoke all its tokens
+      responses:
+        "200":
+          description: Client deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Client deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /developer/clients/{client_id}/rotate-secret:
+    parameters:
+      - $ref: "#/components/parameters/OAuthClientId"
+    post:
+      tags: [Developer]
+      summary: Rotate client secret and revoke existing tokens
+      responses:
+        "200":
+          description: New secret (shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  client:
+                    allOf:
+                      - $ref: "#/components/schemas/OAuthClient"
+                      - type: object
+                        properties:
+                          client_secret:
+                            type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ──────────────────────────────────────────────
+  # OAuth 2.0
+  # ──────────────────────────────────────────────
+  /oauth2/authorize:
+    get:
+      tags: [OAuth 2.0]
+      summary: Authorization endpoint - get consent screen details
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: scope
+          in: query
+          schema:
+            type: string
+            description: Space-separated scopes
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+            description: PKCE code challenge
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [S256, plain]
+            default: S256
+      responses:
+        "200":
+          description: Authorization details for consent screen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client:
+                    type: object
+                    properties:
+                      client_id:
+                        type: string
+                      name:
+                        type: string
+                      description:
+                        type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        description:
+                          type: string
+                  redirect_uri:
+                    type: string
+                  state:
+                    type: string
+        "400":
+          description: Invalid request, client, or scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [OAuth 2.0]
+      summary: Process user consent and issue authorization code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, redirect_uri, approved]
+              properties:
+                client_id:
+                  type: string
+                redirect_uri:
+                  type: string
+                  format: uri
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                state:
+                  type: string
+                approved:
+                  type: boolean
+                code_challenge:
+                  type: string
+                code_challenge_method:
+                  type: string
+                  enum: [S256, plain]
+      responses:
+        "200":
+          description: Authorization code or access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect_uri:
+                    type: string
+                  code:
+                    type: string
+                    description: Present only if approved
+                  state:
+                    type: string
+                  error:
+                    type: string
+                    description: "access_denied if not approved"
+        "400":
+          description: Invalid request or client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /oauth2/token:
+    post:
+      tags: [OAuth 2.0]
+      summary: Exchange authorization code or refresh token for access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token]
+                code:
+                  type: string
+                  description: Required for authorization_code grant
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  description: Required unless using PKCE
+                redirect_uri:
+                  type: string
+                code_verifier:
+                  type: string
+                  description: PKCE verifier
+                refresh_token:
+                  type: string
+                  description: Required for refresh_token grant
+      responses:
+        "200":
+          description: Token response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    example: 3600
+                  refresh_token:
+                    type: string
+                  scope:
+                    type: string
+        "400":
+          description: Invalid grant or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "401":
+          description: Invalid client credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth2/revoke:
+    post:
+      tags: [OAuth 2.0]
+      summary: Revoke an access or refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Token revoked (always returns 200 per RFC 7009)
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth2/userinfo:
+    get:
+      tags: [OAuth 2.0]
+      summary: Get current user info (standard OpenID Connect userinfo)
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sub:
+                    type: string
+                    description: User ID
+                  email:
+                    type: string
+                    format: email
+                  name:
+                    type: string
+                  given_name:
+                    type: string
+                  family_name:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# ════════════════════════════════════════════════
+# Components
+# ════════════════════════════════════════════════
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /auth/login or /auth/register
+
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /api/v1/oauth2/authorize
+          tokenUrl: /api/v1/oauth2/token
+          scopes:
+            "read:user": Read user profile
+            "read:databases": Read databases
+            "write:databases": Create, update, and delete databases
+            "read:fields": Read fields
+            "write:fields": Create, update, and delete fields
+            "read:entries": Read entries
+            "write:entries": Create, update, and delete entries
+            "read:visualizations": Read visualizations
+            "write:visualizations": Create, update, and delete visualizations
+
+  parameters:
+    DatabaseSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Database URL slug
+      example: inventory
+
+    FieldId:
+      name: field_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId of the field
+      example: 665f1a2b3c4d5e6f7a8b9c0d
+
+    EntryId:
+      name: entry_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId of the entry
+      example: 665f1a2b3c4d5e6f7a8b9c0e
+
+    VizId:
+      name: viz_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId of the visualization
+      example: 665f1a2b3c4d5e6f7a8b9c0f
+
+    MemberId:
+      name: member_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId of the membership
+      example: 665f1a2b3c4d5e6f7a8b9c10
+
+    NotificationId:
+      name: notification_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB ObjectId of the notification
+      example: 665f1a2b3c4d5e6f7a8b9c11
+
+    OAuthClientId:
+      name: client_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: OAuth client_id string
+      example: dd_abc123def456
+
+  schemas:
+    # ── Core models ──────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 665f1a2b3c4d5e6f7a8b9c00
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        first_name:
+          type: string
+          example: Alice
+        last_name:
+          type: string
+          example: Smith
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Alice's Workspace
+        owner_id:
+          type: string
+        stripe_customer_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AccountMembership:
+      type: object
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        user_id:
+          type: string
+        user_email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, member]
+        permissions:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [active, pending, inactive]
+        invited_by:
+          type: string
+          nullable: true
+        invited_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Database:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          example: Inventory
+        slug:
+          type: string
+          example: inventory
+        description:
+          type: string
+        user_id:
+          type: string
+        account_id:
+          type: string
+          nullable: true
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/Field"
+          description: Included when fetching a single database
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FieldType:
+      type: string
+      enum: [BOOL, INT, DEC, STR, DATE, EMAIL, URL, DICT, LIST]
+
+    Field:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: price
+        field_type:
+          $ref: "#/components/schemas/FieldType"
+        required:
+          type: boolean
+        default_value:
+          description: Default value matching the field type
+        order:
+          type: integer
+        database_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Entry:
+      type: object
+      properties:
+        id:
+          type: string
+        database_id:
+          type: string
+        values:
+          type: object
+          additionalProperties: true
+          example:
+            name: Widget A
+            price: 9.99
+            in_stock: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ChartType:
+      type: string
+      enum: [bar, line, pie]
+
+    Aggregation:
+      type: string
+      enum: [count, sum]
+      default: count
+
+    Visualization:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          example: Sales by Region
+        chart_type:
+          $ref: "#/components/schemas/ChartType"
+        database_slugs:
+          type: array
+          items:
+            type: string
+        x_field:
+          type: string
+        y_field:
+          type: string
+          nullable: true
+        aggregation:
+          $ref: "#/components/schemas/Aggregation"
+        user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ChartSeries:
+      type: object
+      properties:
+        database_slug:
+          type: string
+        database_title:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: number
+
+    ChartData:
+      type: object
+      properties:
+        labels:
+          type: array
+          items:
+            type: string
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChartSeries"
+        chart_type:
+          $ref: "#/components/schemas/ChartType"
+        x_field:
+          type: string
+        y_field:
+          type: string
+          nullable: true
+        aggregation:
+          $ref: "#/components/schemas/Aggregation"
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        user_email:
+          type: string
+          format: email
+        action:
+          type: string
+          example: DATABASE_CREATED
+        resource_type:
+          type: string
+          example: database
+        resource_id:
+          type: string
+          nullable: true
+        resource_name:
+          type: string
+          nullable: true
+        database_slug:
+          type: string
+          nullable: true
+        details:
+          type: string
+          nullable: true
+        changes:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: object
+            properties:
+              from: {}
+              to: {}
+        previous_state:
+          type: object
+          nullable: true
+        new_state:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        notification_type:
+          type: string
+          example: database_created
+        title:
+          type: string
+        message:
+          type: string
+        link:
+          type: string
+          nullable: true
+        read:
+          type: boolean
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        actor_email:
+          type: string
+          nullable: true
+        resource_type:
+          type: string
+          nullable: true
+        resource_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationChannel:
+      type: object
+      properties:
+        in_app:
+          type: boolean
+          default: true
+        email:
+          type: boolean
+          default: false
+
+    NotificationPreference:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        email_enabled:
+          type: boolean
+        weekly_digest:
+          type: boolean
+        team_invites:
+          $ref: "#/components/schemas/NotificationChannel"
+        database_changes:
+          $ref: "#/components/schemas/NotificationChannel"
+        entry_modifications:
+          $ref: "#/components/schemas/NotificationChannel"
+        field_changes:
+          $ref: "#/components/schemas/NotificationChannel"
+        unsubscribe_token:
+          type: string
+
+    Subscription:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        stripe_subscription_id:
+          type: string
+        stripe_price_id:
+          type: string
+        status:
+          type: string
+          enum: [active, past_due, canceled, incomplete, trialing]
+        current_period_start:
+          type: string
+          format: date-time
+          nullable: true
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_at_period_end:
+          type: boolean
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    OAuthClient:
+      type: object
+      properties:
+        client_id:
+          type: string
+          example: dd_abc123def456
+        name:
+          type: string
+          example: My Integration
+        description:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        scopes:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── Common ───────────────────────────────────
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 42
+        pages:
+          type: integer
+          example: 3
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        messages:
+          type: object
+          description: Field-level validation errors
+          additionalProperties: true
+
+    OAuthError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: invalid_request
+        error_description:
+          type: string
+
+  responses:
+    ValidationError:
+      description: Request body validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Validation failed
+            messages:
+              email: ["Not a valid email address."]
+
+    Unauthorized:
+      description: Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Missing or invalid token
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Permission denied
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Resource not found
